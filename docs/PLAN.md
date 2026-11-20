@@ -33,6 +33,19 @@ The prototype already uses the layout shape that `layout.json` will use:
 
 Screen coordinates are wall pixels (1280 × 720). Widget coordinates are relative to their screen.
 
+## Warping onto a real wall
+
+The projector doesn't point at one flat wall square-on, and the surface can be a room corner, a wall plus the ceiling, or furniture in the way. ProjectorRoot's keystone tool uses the projector's built-in 4-corner keystone. That is one warp for the whole image, so it can only straighten one flat surface.
+
+BearWall warps **per screen** instead:
+- Each screen sits on one flat surface and can have a `quad`: its 4 corners on the wall in wall pixels, in the order top-left, top-right, bottom-left, bottom-right.
+- The screen lays out flat at its own `w` × `h`. A CSS `matrix3d` homography maps that rectangle onto the quad. The GPU does this natively, and Chrome 95 supports it.
+- Widgets inside a screen don't know about the warp. Dragging a widget undoes the warp with the reverse mapping, so drags still feel right.
+- Pins refuse folded or mirrored shapes.
+- A screen can't bend around a corner. Put one screen on each side instead. Curved surfaces would need a mesh warp, which isn't planned.
+- The hardware keystone can stay neutral. That may also make animation cheaper, because SurfaceFlinger then has no keystone pass to redo every frame. Measure this in Phase 1.
+- This replaces the earlier plan for a root-only "warp card" that pushed `persist.sys.keystone.*` props. Root for the app is still unverified, and this approach doesn't need it.
+
 ## Look
 
 - **Widgets** use JetBrains Mono, bundled locally (OFL).
@@ -100,7 +113,7 @@ Screen coordinates are wall pixels (1280 × 720). Widget coordinates are relativ
    - the widget module contract: `{ name, modes, settings schema, defaults, mount(), update() }`
    - the API list
 
-   Phase 1 also adds a **warp card** on the control page that reuses ProjectorRoot's keystone system.
+   Calibrate the per-screen corner pins on the real wall from a phone, and measure motion cost with the hardware keystone neutral.
 2. **PC agent** and the first dynamic widgets: PC stats, now playing, On Air.
 3. The rest of the standalone widgets.
 4. The rest of the dynamic widgets, then the v2 extras.

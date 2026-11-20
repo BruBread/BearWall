@@ -177,10 +177,13 @@ const types = {};
 const known = w => !!types[w.type];
 // Wall coordinates are 1280x720 px. Widget boxes are relative to their screen.
 const DEFAULT_LAYOUT = { screens: [
-  { id: 's1', name: 'Above desk', x: 88, y: 96, w: 560, h: 432,
-    widgets: [{ id: 'w1', type: 'weather', mode: 'square', anchor: 'right', x: 16, y: 16, w: 264, h: 264, opts: {} }] },
-  { id: 's2', name: 'Corner', x: 760, y: 32, w: 488, h: 232,
-    widgets: [{ id: 'w2', type: 'weather', mode: 'rect', anchor: 'right', x: 0, y: 0, w: 488, h: 104, opts: {} }] }
+  { id: 's1', name: 'Above desk', x: 64, y: 120, w: 576, h: 440, widgets: [
+    { id: 'w1', type: 'weather', mode: 'square', anchor: 'right', x: 0, y: 0, w: 264, h: 264, opts: {} },
+    { id: 'w3', type: 'clock', mode: 'square', anchor: 'right', x: 296, y: 0, w: 264, h: 264, opts: {} },
+    { id: 'w4', type: 'hourly', mode: 'rect', anchor: 'left', x: 0, y: 304, w: 560, h: 112, opts: {} }] },
+  { id: 's2', name: 'Corner', x: 744, y: 32, w: 488, h: 232, widgets: [
+    { id: 'w2', type: 'date', mode: 'rect', anchor: 'right', x: 0, y: 0, w: 488, h: 104, opts: {} },
+    { id: 'w5', type: 'sky', mode: 'rect', anchor: 'right', x: 0, y: 120, w: 488, h: 104, opts: {} }] }
 ] };
 const CITIES = [
   ['Manila', 'Metro Manila, PH', 14.6, 120.98], ['Quezon City', 'Metro Manila, PH', 14.68, 121.04],

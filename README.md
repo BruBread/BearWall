@@ -13,9 +13,11 @@ Planning is done and the interactive prototype works. Phase 1 (the real app on t
 Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need a build step or a server.
 
 - **The wall:** the black 16:9 box shows exactly what the projector would show. **Fullscreen** shows it the way it looks on the wall.
-- **Set-area mode:** drag screens and widgets around, and drag the corners to resize them. Everything snaps to an 8 px grid on a 1280 × 720 wall. Arrow keys nudge the selection, Shift + arrows resize it, and Delete removes it.
+- **Set-area mode:** drag widgets around inside their screen and drag the corners to resize them. Move a screen by dragging its pink name tag. Everything snaps to an 8 px grid on a 1280 × 720 wall. Arrow keys nudge the selection, Shift + arrows resize it, and Delete removes it.
+- **Corner pins:** the projector usually doesn't hit one flat wall square-on. Select a screen, press **Warp corners**, and drag its 4 pins until it looks straight on the real wall. Each screen gets its own warp, so one screen can sit on each side of a room corner.
+- **Widgets:** weather, clock, date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
-- **Styling:** square or rectangle mode, ring color and thickness, glow, icon colors, and four motion levels.
+- **Styling:** ring color and thickness, glow, icon colors, and four motion levels.
 
 The prototype saves your layout and settings in your browser's local storage.
 
@@ -29,7 +31,7 @@ The full design is in [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Roadmap
 
-1. **Phase 1:** kiosk app and server, the wall runtime, the weather widget, the control page, and a warp card that reuses ProjectorRoot's keystone system.
+1. **Phase 1:** kiosk app and server, the wall runtime, the weather widget, the control page, and calibrating the corner pins on the real wall.
 2. **Phase 2:** the PC agent and the first PC widgets (PC stats, now playing, On Air).
 3. **Phase 3:** the rest of the standalone widgets (clock, calendar, countdown, sun and moon, and more).
 4. **Phase 4:** the rest of the PC widgets.
