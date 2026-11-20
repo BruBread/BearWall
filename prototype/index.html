@@ -5,174 +5,7 @@
 <title>BearWall</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<style>
-  /* Layout: a black 16:9 wall on top (exactly what the projector shows), glass control cards below.
-     Single dark look on purpose (matches the TuyaLightsControl app). Avoids CSS newer than Chrome 95,
-     because the projector's WebView is Chrome 95. */
-  :root {
-    --bg: #150c2c; --glass: #ffffff12; --line: #ffffff26; --text: #f6f1ff; --dim: #b8acd9;
-    --c: #ff7ac6; --c2: #8f9bff; --wall: #000; --w-text: #f4f7ff; --ok: #7dffa8; --warn: #ffd84d; --bad: #ff8a8a;
-    --ring: #5ee6ff; --thick: 9; --track: .18; --glow: .5;
-    --ui: Nunito, 'Segoe UI', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
-    color-scheme: dark;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--ui); overflow-x: hidden; }
-  button, input { font: inherit; color: inherit; }
-
-  .blob { position: fixed; width: 48vmax; height: 48vmax; border-radius: 50%; filter: blur(90px); pointer-events: none; z-index: 0; }
-  .b1 { background: var(--c); opacity: .35; top: -20vmax; left: -14vmax; }
-  .b2 { background: #5b6cff; opacity: .3; bottom: -22vmax; right: -16vmax; }
-
-  main { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding-block: 28px 48px;
-    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-  h1 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -.4px; }
-  h1 span { color: var(--c); }
-  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--glass); border: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--dim); }
-  .pill i { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 10px var(--warn); flex: none; }
-  .pill[data-state=live] i { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
-  .pill[data-state=offline] i { background: var(--bad); box-shadow: 0 0 10px var(--bad); }
-
-  .glass { background: var(--glass); border: 1px solid var(--line); border-radius: 28px; padding: 20px; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); min-width: 0; }
-  h2 { margin: 0; font-size: 17px; font-weight: 800; }
-  .sub { font-size: 13px; color: var(--dim); margin-top: 4px; line-height: 1.45; }
-  .lbl { font-size: 12px; font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: .6px; margin: 16px 0 8px; display: flex; justify-content: space-between; }
-
-  /* ---------- the wall ---------- */
-  .stage-card { margin-bottom: 18px; }
-  .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-  .stage-head .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .wall-wrap { border-radius: 14px; }
-  .wall-wrap:fullscreen { background: #000; display: flex; align-items: center; justify-content: center; border-radius: 0; }
-  .wall-wrap:fullscreen .stage { width: min(100vw, 177.78vh); border-radius: 0; box-shadow: none; }
-  .stage { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; background: var(--wall); border-radius: 14px; overflow: hidden; box-shadow: 0 18px 50px #0008, 0 0 0 1px #ffffff14; }
-  .stage.edit { touch-action: none; background-image: linear-gradient(#ffffff0d 1px, transparent 1px), linear-gradient(90deg, #ffffff0d 1px, transparent 1px); background-size: 2.5% 4.444%; }
-  .screen, .widget { position: absolute; }
-  /* outlines, names and handles appear only in set-area mode */
-  .stage.edit .frame { cursor: move; }
-  .stage.edit .screen { outline: 2px dashed var(--c); outline-offset: 3px; border-radius: 6px; }
-  .stage.edit .widget { outline: 2px dashed var(--c2); outline-offset: -2px; border-radius: 6px; }
-  .stage.edit .frame.sel { outline-style: solid; }
-  .stage.edit .frame::before { content: attr(data-label); position: absolute; z-index: 3; font: 800 clamp(9px, 1vw, 12px) var(--ui); white-space: nowrap; padding: 1px 7px; border-radius: 6px; background: #000c; }
-  .stage.edit .screen::before { left: 4px; top: 4px; color: var(--c); }
-  .stage.edit .widget::before { right: 4px; bottom: 4px; color: var(--c2); }
-  .handle { position: absolute; z-index: 4; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px var(--c); display: none; }
-  .handle::after { content: ''; position: absolute; inset: -9px; }
-  .stage.edit .frame.sel > .handle { display: block; }
-  .handle[data-h=nw] { left: -9px; top: -9px; cursor: nwse-resize; } .handle[data-h=se] { right: -9px; bottom: -9px; cursor: nwse-resize; }
-  .handle[data-h=ne] { right: -9px; top: -9px; cursor: nesw-resize; } .handle[data-h=sw] { left: -9px; bottom: -9px; cursor: nesw-resize; }
-
-  /* ---------- weather widget (JetBrains Mono, scales from --u = 1% of its box) ---------- */
-  .wx { --u: 1px; position: relative; width: 100%; height: 100%; color: var(--w-text); font-family: var(--mono); }
-  .wx svg { display: block; overflow: visible; }
-  .wx .ic { color: var(--w-text); }
-  .wx .ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
-  .wx .ic .cloud { fill: var(--wall); }
-  /* icon colors: natural by default, or all white, or all ring color */
-  .stage, .chips { --i-sun: #ffd84d; --i-moon: #fff1b8; --i-cloud: #eef3fb; --i-rain: #5ec8ff; --i-bolt: #ffd84d; --i-fog: #b9c6d8; }
-  .stage[data-icons=white] { --i-sun: var(--w-text); --i-moon: var(--w-text); --i-cloud: var(--w-text); --i-rain: var(--w-text); --i-bolt: var(--w-text); --i-fog: var(--w-text); }
-  .stage[data-icons=ring] { --i-sun: var(--ring); --i-moon: var(--ring); --i-cloud: var(--ring); --i-rain: var(--ring); --i-bolt: var(--ring); --i-fog: var(--ring); }
-  .c-sun { stroke: var(--i-sun); } .c-moon { stroke: var(--i-moon); } .c-cloud { stroke: var(--i-cloud); }
-  .c-rain { stroke: var(--i-rain); } .c-bolt { stroke: var(--i-bolt); } .c-fog { stroke: var(--i-fog); }
-  .wx .ring { position: relative; aspect-ratio: 1; }
-  .wx .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .wx .trk, .wx .arc { fill: none; stroke: var(--ring); stroke-width: var(--thick); }
-  .wx .trk { opacity: var(--track); }
-  .wx .arc { stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 1.3s cubic-bezier(.2, .8, .2, 1);
-    filter: drop-shadow(0 0 calc(var(--glow) * var(--u) * 2.4) var(--ring)); }
-  .wx .tp { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; letter-spacing: -.04em;
-    text-shadow: 0 0 calc(var(--glow) * var(--u) * 5) currentColor; font-variant-numeric: tabular-nums; }
-  .wx .dg { font-weight: 300; opacity: .8; }
-  .wx .gr { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 calc(var(--glow) * var(--u) * 3) currentColor; }
-  .wx .cur { display: inline-block; width: .55em; height: .12em; margin-left: .08em; background: var(--ring); vertical-align: baseline; }
-  .wx .mt { color: #ffffffa6; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  /* square: icon top-left, ring centre, greeting bottom */
-  .wx.square { display: grid; grid-template-rows: 1fr auto; justify-items: center; align-items: center; }
-  .wx.square .ic { position: absolute; left: 3%; top: 2%; width: 22%; height: 22%; }
-  .wx.square .ring { width: 60%; margin-top: 6%; }
-  .wx.square .tp { font-size: calc(var(--u) * 17); }
-  .wx.square .tx { width: 100%; overflow: hidden; text-align: center; padding-bottom: 3%; }
-  .wx.square .gr { font-size: calc(var(--u) * 6.4 * var(--fit, 1)); }
-  .wx.square .mt { font-size: calc(var(--u) * 4 * var(--fit, 1)); margin-top: calc(var(--u) * 1.6); }
-
-  /* rectangle: one row, anchor flips the order to hug a corner */
-  .wx.rect { display: flex; align-items: center; gap: calc(var(--u) * 14); }
-  .wx.rect.right { flex-direction: row-reverse; }
-  .wx.rect .ic { height: 64%; aspect-ratio: 1; flex: none; }
-  .wx.rect .ring { height: 100%; flex: none; }
-  .wx.rect .tp { font-size: calc(var(--u) * 27); }
-  .wx.rect .tx { flex: 1 1 0; min-width: 0; overflow: hidden; }
-  .wx.rect.right .tx { text-align: right; }
-  .wx.rect .gr { font-size: calc(var(--u) * 24 * var(--fit, 1)); }
-  .wx.rect .mt { font-size: calc(var(--u) * 14 * var(--fit, 1)); margin-top: calc(var(--u) * 4); }
-
-  /* ---------- motion levels ---------- */
-  .rays { transform-origin: 32px 32px; }
-  .m-full .rays, .m-lite .rays { animation: spin 26s linear infinite; --st: 208; }
-  .m-full .drift, .m-lite .drift { animation: drift 5s ease-in-out infinite alternate; --st: 40; }
-  .m-full .drop, .m-lite .drop { animation: fall 1.1s linear infinite; --st: 9; }
-  .drop:nth-of-type(2) { animation-delay: -.37s !important; } .drop:nth-of-type(3) { animation-delay: -.74s !important; }
-  .m-full .bolt, .m-lite .bolt { animation: flash 4.5s linear infinite; --st: 36; }
-  .m-full .fogl, .m-lite .fogl { animation: drift 4s ease-in-out infinite alternate; --st: 32; }
-  .fogl:nth-of-type(2) { animation-direction: alternate-reverse !important; }
-  .m-full .moon, .m-lite .moon { animation: breathe 5s ease-in-out infinite alternate; --st: 40; }
-  .m-full .cur, .m-lite .cur { animation: blink 1.05s steps(1) infinite; }
-  .m-lite .anim { animation-timing-function: steps(var(--st)) !important; }
-  .m-off .arc { transition: none; }
-  .m-off .cur, .m-calm .cur { opacity: 0; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes drift { from { transform: translateX(-2.5px); } to { transform: translateX(2.5px); } }
-  @keyframes fall { from { transform: translateY(-3px); opacity: 0; } 30% { opacity: 1; } to { transform: translateY(7px); opacity: 0; } }
-  @keyframes flash { 0%, 80%, 86%, 100% { opacity: .25; } 82%, 88% { opacity: 1; } }
-  @keyframes breathe { from { opacity: .7; } to { opacity: 1; } }
-  @keyframes blink { 50% { opacity: 0; } }
-
-  /* ---------- Tuya-style controls ---------- */
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
-  .tabs { display: flex; background: #ffffff10; border-radius: 99px; padding: 4px; gap: 4px; }
-  .tabs button { flex: 1; border: 0; background: none; padding: 9px 6px; border-radius: 99px; font-weight: 800; cursor: pointer; color: var(--dim); transition: background .2s, color .2s; }
-  .tabs button.on { background: #fff; color: #1b1035; }
-  button:focus-visible { outline: 3px solid #fff8; outline-offset: 2px; }
-  .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
-  .chip { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border-radius: 18px; border: 1px solid var(--line); background: #ffffff0d; cursor: pointer; font-weight: 800; font-size: 12px; transition: transform .15s, background .2s; }
-  .chip svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
-  .chip .cloud { fill: #231839; }
-  .chip:hover { background: #ffffff1c; transform: translateY(-2px); }
-  .chip.on { background: #ffffff26; border-color: #fff; box-shadow: 0 0 14px #ffffff40; }
-  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; border-radius: 99px; background: linear-gradient(90deg, #ffffff18, var(--c)); outline: none; cursor: pointer; margin: 0; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%; background: #fff; box-shadow: 0 0 14px var(--c), 0 3px 8px #0006; }
-  input[type=range]::-moz-range-thumb { width: 28px; height: 28px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 14px var(--c); }
-  input[type=range]:focus-visible { box-shadow: 0 0 0 3px #fff8; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #ffffff12; font-weight: 700; font-size: 14px; }
-  .row:last-child { border-bottom: 0; }
-  .switch { -webkit-appearance: none; appearance: none; width: 52px; height: 30px; border-radius: 99px; background: #ffffff22; position: relative; cursor: pointer; flex: none; transition: background .25s; margin: 0; }
-  .switch::after { content: ''; position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .25s; }
-  .switch:checked { background: linear-gradient(90deg, var(--c), #8f6bff); }
-  .switch:checked::after { transform: translateX(22px); }
-  .switch:focus-visible { outline: 3px solid #fff8; outline-offset: 2px; }
-  .field { width: 100%; background: #ffffff14; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; font-weight: 800; }
-  .field:focus-visible { outline: 3px solid #fff8; outline-offset: 1px; }
-  .sugg { list-style: none; margin: 6px 0 0; padding: 6px; border-radius: 16px; background: #24183f; border: 1px solid var(--line); }
-  .sugg button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 10px; font-weight: 800; font-size: 13px; cursor: pointer; }
-  .sugg button:hover, .sugg button:focus-visible { background: #ffffff14; }
-  .sugg span, .sugg .none { color: var(--dim); font-weight: 700; }
-  .sugg .none { padding: 8px 10px; font-size: 13px; }
-  .swatches { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .sw { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; box-shadow: 0 0 12px var(--s); background: var(--s); }
-  .sw.on { border-color: #fff; }
-  .btn { border: 0; border-radius: 99px; padding: 9px 16px; font-weight: 800; background: #fff; color: #1b1035; cursor: pointer; }
-  .btn.quiet { background: #ffffff14; color: var(--text); border: 1px solid var(--line); }
-  .btn.danger { background: none; color: var(--c); border: 1px solid var(--c); }
-  .btn:disabled { opacity: .35; cursor: default; }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-  .selname { font-weight: 800; font-size: 15px; }
-  .note { font-size: 13px; color: var(--dim); margin-top: 10px; line-height: 1.45; }
-  #widgetTools .btn { margin-top: 10px; }
-  @media (prefers-reduced-motion: reduce) { .chip, .tabs button, .switch, .switch::after { transition: none; } }
-</style>
+<link rel="stylesheet" href="style.css">
 
 <div class="blob b1"></div><div class="blob b2"></div>
 <main>
@@ -198,22 +31,39 @@
   <div class="grid">
     <section class="glass">
       <h2>Layout</h2>
-      <div class="sub">Turn on set-area mode, then drag a box to move it and drag a corner to resize it. Everything snaps to an 8 px grid on the 1280 × 720 wall.</div>
+      <div class="sub">Turn on set-area mode. Drag a widget to move it and drag its corners to resize it. Move a screen by dragging its pink name tag. Everything snaps to an 8 px grid on the 1280 × 720 wall.</div>
       <label class="row">Set-area mode<input type="checkbox" class="switch" id="edit"></label>
       <div class="lbl"><span>Selected</span></div>
       <div class="selname" id="selName">Nothing selected</div>
+
       <div id="screenTools" hidden>
         <div class="lbl"><span>Screen name</span></div>
         <input class="field" id="screenName" maxlength="32" autocomplete="off" aria-label="Screen name">
+        <div class="lbl"><span>Wall shape</span></div>
+        <button class="btn quiet" id="warp">Warp corners</button>
+        <div class="note" id="warpNote" hidden>Drag the 4 white pins until this screen looks straight on the real wall. Arrow keys move the last pin you touched by 1 px (Shift: 8 px). On a monitor a warped screen looks skewed. That's expected.</div>
       </div>
+
       <div id="widgetTools" hidden>
-        <div class="lbl"><span>Widget mode</span></div>
+        <div class="lbl"><span>Mode</span></div>
         <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
+        <div id="anchorRow">
+          <div class="lbl"><span>Hug corner</span></div>
+          <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
+        </div>
+        <div id="widgetOpts"></div>
+        <div class="lbl"><span>Screen</span></div>
+        <select class="field" id="moveTo" aria-label="Move to another screen"></select>
         <button class="btn quiet" id="selParent">Select its screen</button>
       </div>
+
+      <div class="lbl"><span>Add</span></div>
+      <div class="add">
+        <select class="field" id="addType" aria-label="Widget type"></select>
+        <button class="btn" id="addWidget">Add widget</button>
+      </div>
       <div class="actions">
-        <button class="btn" id="addScreen">Add screen</button>
-        <button class="btn" id="addWeather">Add weather</button>
+        <button class="btn quiet" id="addScreen">Add screen</button>
         <button class="btn danger" id="del" disabled>Delete</button>
         <button class="btn quiet" id="reset">Reset layout</button>
       </div>
@@ -230,7 +80,7 @@
         <div class="chips" id="conds"></div>
         <div class="lbl"><span>Temperature</span><span id="tempVal"></span></div>
         <input type="range" id="temp" min="18" max="38" step="1" aria-label="Temperature">
-        <div class="lbl"><span>Humidity (the ring)</span><span id="humVal"></span></div>
+        <div class="lbl"><span>Humidity</span><span id="humVal"></span></div>
         <input type="range" id="hum" min="0" max="100" step="1" aria-label="Humidity">
         <div class="lbl"><span>Time of day</span><span id="hourVal"></span></div>
         <input type="range" id="hour" min="0" max="23.75" step=".25" aria-label="Time of day">
@@ -245,14 +95,6 @@
       <ul class="sugg" id="sugg" hidden></ul>
       <div class="lbl"><span>Your name in the greeting</span></div>
       <input class="field" id="name" placeholder="Optional" maxlength="24" autocomplete="off" aria-label="Name in greeting">
-      <div class="lbl"><span>Rectangle anchor</span></div>
-      <div class="tabs" id="anchor"><button data-v="left">Left corner</button><button data-v="right">Right corner</button></div>
-    </section>
-
-    <section class="glass">
-      <h2>Extras</h2>
-      <div class="sub">The icon, ring, greeting and city are always shown. Add these if you want more. Applies to both modes.</div>
-      <div id="shows"></div>
     </section>
 
     <section class="glass">
@@ -279,405 +121,10 @@
   </div>
 </main>
 
-<script>
-const $ = s => document.querySelector(s);
-const WALL_W = 1280, WALL_H = 720, GRID = 8, MIN = 48;
-const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
-const snap = v => Math.round(v / GRID) * GRID;
-const copy = o => JSON.parse(JSON.stringify(o));
-const uid = () => Math.random().toString(36).slice(2, 8);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-// Saved per browser. Phase 1 moves this to the projector's /api/layout and /api/settings.
-const store = {
-  get(k, d) { try { const v = JSON.parse(localStorage.getItem('bearwall.' + k)); return v == null ? d : v; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('bearwall.' + k, JSON.stringify(v)); } catch (e) {} }
-};
-
-// Wall coordinates are 1280x720 px. Widget boxes are relative to their screen.
-const DEFAULT_LAYOUT = { screens: [
-  { id: 's1', name: 'Above desk', x: 88, y: 112, w: 400, h: 400,
-    widgets: [{ id: 'w1', type: 'weather', mode: 'square', x: 16, y: 16, w: 368, h: 368 }] },
-  { id: 's2', name: 'Corner', x: 776, y: 40, w: 464, h: 104,
-    widgets: [{ id: 'w2', type: 'weather', mode: 'rect', x: 0, y: 0, w: 464, h: 104 }] }
-] };
-const CITIES = [
-  ['Manila', 'Metro Manila, PH', 14.6, 120.98], ['Quezon City', 'Metro Manila, PH', 14.68, 121.04],
-  ['Cebu City', 'Central Visayas, PH', 10.32, 123.89], ['Davao City', 'Davao Region, PH', 7.07, 125.61],
-  ['Bacolod City', 'Negros Occidental, PH', 10.68, 122.95], ['Iloilo City', 'Western Visayas, PH', 10.72, 122.56],
-  ['Tokyo', 'Tokyo, JP', 35.68, 139.69], ['Singapore', 'SG', 1.29, 103.85],
-  ['London', 'England, GB', 51.51, -0.13], ['New York', 'New York, US', 40.71, -74.01]
-].map(([name, admin, lat, lon]) => ({ name, admin, lat, lon }));
-const DEFAULT_SETTINGS = { city: CITIES[0], name: '', anchor: 'right', show: { feels: false, hilo: false },
-  ring: '#5ee6ff', thick: 9, track: .18, glow: .5, motion: 'full', icons: 'natural' };
-
-let L = store.get('layout', null);
-if (!L || !Array.isArray(L.screens)) L = copy(DEFAULT_LAYOUT);
-const savedSettings = store.get('settings', null);
-const S = Object.assign(copy(DEFAULT_SETTINGS), savedSettings || {});
-S.show = Object.assign({ feels: false, hilo: false }, S.show);
-if (!savedSettings && matchMedia('(prefers-reduced-motion: reduce)').matches) S.motion = 'calm';
-const P = { source: 'live', cond: 'partly', temp: 31, hum: 74, hour: 19.5 };   // sample values, not saved
-let live = null, liveState = 'loading';   // loading | live | offline
-let sel = null;                           // { sid } or { sid, wid }
-const saveLayout = () => store.set('layout', L);
-const saveSettings = () => store.set('settings', S);
-const screenOf = sid => L.screens.find(s => s.id === sid);
-const widgetOf = (sid, wid) => { const s = screenOf(sid); return s && s.widgets.find(w => w.id === wid); };
-
-const CONDS = [['clear', 'Clear'], ['partly', 'Partly'], ['cloud', 'Cloudy'], ['rain', 'Rain'], ['thunder', 'Thunder'], ['fog', 'Fog']];
-const SHOW = [['feels', 'Feels like'], ['hilo', 'High / low']];
-const RINGS = ['#5ee6ff', '#7dffa8', '#ffd84d', '#ff7ac6', '#ffffff'];
-const NOTES = {
-  full: 'Everything moves: sun rays turn, clouds drift, rain falls, the cursor blinks. Smoothest, but the projector redraws the warped wall every frame.',
-  lite: 'Same motion at about 8 frames a second. Feels alive, much lighter on the projector. Likely the everyday default.',
-  calm: 'Still between updates. The ring sweeps, the number counts and the greeting types only when the data changes.',
-  off: 'Nothing moves. Values just change in place.' };
-
-// Open-Meteo WMO weather codes -> icon. Snow has no icon of its own yet, so it shows as cloud.
-const codeToCond = c => c === 0 ? 'clear' : c <= 2 ? 'partly' : c === 3 ? 'cloud' : c <= 48 ? 'fog' : c >= 95 ? 'thunder'
-  : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? 'rain' : 'cloud';
-
-// Move (dir '') or resize from a corner (dir 'nw' | 'ne' | 'sw' | 'se'), snapped to the grid and kept inside the parent.
-function moveResize(b, s, dx, dy, dir, pw, ph) {
-  if (!dir) { b.x = clamp(snap(s.x + dx), 0, pw - s.w); b.y = clamp(snap(s.y + dy), 0, ph - s.h); return; }
-  let l = s.x, t = s.y, r = s.x + s.w, bt = s.y + s.h;
-  if (dir.includes('w')) l = clamp(snap(l + dx), 0, r - MIN);
-  if (dir.includes('e')) r = clamp(snap(r + dx), l + MIN, pw);
-  if (dir.includes('n')) t = clamp(snap(t + dy), 0, bt - MIN);
-  if (dir.includes('s')) bt = clamp(snap(bt + dy), t + MIN, ph);
-  Object.assign(b, { x: l, y: t, w: r - l, h: bt - t });
-}
-function fitInside(b, pw, ph) { b.w = Math.min(b.w, pw); b.h = Math.min(b.h, ph); b.x = clamp(b.x, 0, pw - b.w); b.y = clamp(b.y, 0, ph - b.h); }
-
-// icons: one stroke width, round ends, so they match the ring
-const CLOUD = '<path class="cloud c-cloud" d="M19 46h27a9 9 0 0 0 1.5-17.9A13 13 0 0 0 22.4 25 10.5 10.5 0 0 0 19 46z"/>';
-const rays = () => Array.from({ length: 8 }, (_, i) => { const a = i * Math.PI / 4, c = Math.cos(a), s = Math.sin(a);
-  return `<line x1="${32 + c * 16}" y1="${32 + s * 16}" x2="${32 + c * 22}" y2="${32 + s * 22}"/>`; }).join('');
-const SUN = `<g class="c-sun"><circle cx="32" cy="32" r="10"/><g class="rays anim">${rays()}</g></g>`;
-const MOON = '<path class="moon anim c-moon" d="M41 13a19 19 0 1 0 11 31 15 15 0 0 1-11-31z"/>';
-function icon(cond, night) {
-  const sky = night ? MOON : SUN;
-  if (cond === 'clear') return sky;
-  if (cond === 'partly') return `<g transform="translate(-1 -3) scale(.78)">${sky}</g><g class="drift anim">${CLOUD}</g>`;
-  if (cond === 'cloud') return `<g class="drift anim">${CLOUD}</g>`;
-  if (cond === 'rain') return `<g transform="translate(0 -7)">${CLOUD}</g><line class="drop anim c-rain" x1="24" y1="47" x2="22" y2="53"/><line class="drop anim c-rain" x1="33" y1="47" x2="31" y2="53"/><line class="drop anim c-rain" x1="42" y1="47" x2="40" y2="53"/>`;
-  if (cond === 'thunder') return `<g transform="translate(0 -7)">${CLOUD}</g><path class="bolt anim c-bolt" d="M34 41l-6 9h8l-6 10"/>`;
-  return `<line class="fogl anim c-fog" x1="14" y1="26" x2="50" y2="26"/><line class="fogl anim c-fog" x1="10" y1="35" x2="46" y2="35"/><line class="fogl anim c-fog" x1="18" y1="44" x2="54" y2="44"/>`;
-}
-const svg = inner => `<svg viewBox="0 0 64 64" aria-hidden="true">${inner}</svg>`;
-
-const greeting = h => (h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 18 ? 'Good afternoon' : 'Good evening') + (S.name.trim() ? `, ${S.name.trim()}` : '');
-const clock = h => { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${(hh + 11) % 12 + 1}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'AM' : 'PM'}`; };
-const nowHour = () => { const n = new Date(); return n.getHours() + n.getMinutes() / 60; };
-
-// what the widgets show: live data when we have it, otherwise the sample values
-function wxData() {
-  if (P.source === 'live' && live) return Object.assign({}, live, { hour: nowHour() });
-  return { cond: P.cond, temp: P.temp, hum: P.hum, feels: P.temp + 4, hi: P.temp + 1, lo: P.temp - 6, night: P.hour < 6 || P.hour >= 18, hour: P.hour };
-}
-
-/* ---------- the wall ---------- */
-const stage = $('#stage');
-const editing = () => $('#edit').checked;
-const HANDLES = ['nw', 'ne', 'sw', 'se'].map(h => `<i class="handle" data-h="${h}"></i>`).join('');
-let W = [];
-
-function place(el, b, pw, ph) {
-  el.style.left = b.x / pw * 100 + '%'; el.style.top = b.y / ph * 100 + '%';
-  el.style.width = b.w / pw * 100 + '%'; el.style.height = b.h / ph * 100 + '%';
-}
-function positionScreen(s) {
-  const el = stage.querySelector(`.screen[data-sid="${s.id}"]`);
-  place(el, s, WALL_W, WALL_H); el.dataset.label = s.name;
-  s.widgets.forEach(w => {
-    fitInside(w, s.w, s.h);
-    const we = el.querySelector(`.widget[data-wid="${w.id}"]`);
-    place(we, w, s.w, s.h); we.dataset.label = 'Weather · ' + (w.mode === 'rect' ? 'rectangle' : 'square');
-  });
-}
-
-function buildStage() {
-  W.forEach(el => { el._ro.disconnect(); clearInterval(el._tw); cancelAnimationFrame(el._raf); });
-  stage.innerHTML = L.screens.map(s => `<div class="screen frame" data-sid="${esc(s.id)}">${s.widgets.map(w =>
-    `<div class="widget frame" data-sid="${esc(s.id)}" data-wid="${esc(w.id)}"><div class="wx"></div>${HANDLES}</div>`).join('')}${HANDLES}</div>`).join('');
-  W = Array.from(stage.querySelectorAll('.wx'));
-  W.forEach(el => { const f = el.parentElement; el._w = widgetOf(f.dataset.sid, f.dataset.wid); initWx(el); });
-  L.screens.forEach(positionScreen);
-  render();
-}
-
-function initWx(el) {
-  el.innerHTML = `<div class="ic"></div><div class="ring"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" pathLength="100"/></svg><div class="tp"><span class="n">0</span><span class="dg">°</span></div></div><div class="tx"><div class="gr"><span class="t"></span><i class="cur"></i></div><div class="mt"></div></div>`;
-  el._v = 0; el._g = ''; el._i = '';
-  el._ro = new ResizeObserver(() => { const r = el.getBoundingClientRect(); el.style.setProperty('--u', Math.min(r.width, r.height) / 100 + 'px'); fitText(el); });
-  el._ro.observe(el);
-}
-
-// text never overlaps the ring or icon: shrink it to fit its column (down to half size), then ellipsis
-function fitText(el) {
-  const tx = el.querySelector('.tx'), t = el.querySelector('.t'), typed = t.textContent;
-  t.textContent = el._g;   // measure the full greeting, not the half-typed one
-  for (const c of tx.querySelectorAll('.gr, .mt')) {
-    c.style.setProperty('--fit', 1);
-    const k = tx.clientWidth / c.scrollWidth;
-    if (k < 1) c.style.setProperty('--fit', Math.max(.5, k * .97));
-  }
-  t.textContent = typed;
-}
-function countTo(el, to) {
-  const n = el.querySelector('.n'), from = el._v;
-  cancelAnimationFrame(el._raf); el._v = to;
-  if (S.motion === 'off' || from === to) { n.textContent = to; return; }
-  const t0 = performance.now(), dur = 900;
-  const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-    n.textContent = Math.round(from + (to - from) * e); if (k < 1) el._raf = requestAnimationFrame(step); };
-  el._raf = requestAnimationFrame(step);
-}
-function typeOut(el, text) {
-  const t = el.querySelector('.t');
-  if (el._g === text) return;
-  el._g = text; clearInterval(el._tw);
-  t.textContent = ''; fitText(el);
-  if (S.motion === 'off') { t.textContent = text; return; }
-  let i = 0;
-  el._tw = setInterval(() => { t.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(el._tw); }, 42);
-}
-
-function render() {
-  const root = document.documentElement.style, d = wxData();
-  stage.className = `stage m-${S.motion}` + (editing() ? ' edit' : '');
-  stage.dataset.icons = S.icons;
-  root.setProperty('--ring', S.ring); root.setProperty('--thick', S.thick); root.setProperty('--track', S.track); root.setProperty('--glow', S.glow);
-  const ic = svg(icon(d.cond, d.night));
-  const meta = [S.city.name, S.show.feels && `feels ${d.feels}°`, S.show.hilo && `H ${d.hi}° L ${d.lo}°`].filter(Boolean).join(' · ');
-  W.forEach(el => {
-    el.className = 'wx ' + (el._w.mode === 'rect' ? 'rect ' + S.anchor : 'square');
-    if (el._i !== ic) { el.querySelector('.ic').innerHTML = ic; el._i = ic; }
-    const r = 50 - S.thick / 2 - 1; el.querySelectorAll('circle').forEach(c => c.setAttribute('r', r));
-    el.querySelector('.arc').style.strokeDashoffset = 100 - d.hum;
-    countTo(el, d.temp);
-    typeOut(el, greeting(d.hour));
-    el.querySelector('.mt').textContent = meta;
-    fitText(el);
-  });
-  renderControls();
-}
-
-function replay() {
-  W.forEach(el => {
-    const arc = el.querySelector('.arc');
-    arc.style.transition = 'none'; arc.style.strokeDashoffset = 100; arc.getBoundingClientRect(); arc.style.transition = '';
-    el._v = 0; el._g = '';
-  });
-  requestAnimationFrame(render);
-}
-
-/* ---------- controls ---------- */
-const onTabs = (id, v) => document.querySelectorAll(`#${id} button`).forEach(b => b.classList.toggle('on', b.dataset.v === v));
-
-function renderControls() {
-  const st = P.source === 'sample' ? 'sample' : liveState;
-  $('#status').dataset.state = st;
-  $('#statusText').textContent = st === 'sample' ? 'Sample weather'
-    : st === 'live' ? `Live · ${S.city.name} · ${new Date(live.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-    : st === 'loading' ? 'Loading weather…' : 'Live weather unavailable here · showing sample';
-  $('#sample').hidden = P.source !== 'sample';
-  $('#tempVal').textContent = P.temp + '°C'; $('#humVal').textContent = P.hum + '%'; $('#hourVal').textContent = clock(P.hour);
-  $('#thickVal').textContent = S.thick; $('#trackVal').textContent = Math.round(S.track * 200) + '%'; $('#glowVal').textContent = Math.round(S.glow * 100) + '%';
-  document.querySelectorAll('#conds .chip').forEach(b => b.classList.toggle('on', b.dataset.v === P.cond));
-  document.querySelectorAll('#swatches .sw').forEach(b => b.classList.toggle('on', b.dataset.v === S.ring));
-  onTabs('source', P.source); onTabs('anchor', S.anchor); onTabs('motion', S.motion); onTabs('icons', S.icons);
-  $('#motionNote').textContent = NOTES[S.motion];
-  renderSel();
-}
-
-function renderSel() {
-  stage.querySelectorAll('.frame.sel').forEach(f => f.classList.remove('sel'));
-  const s = sel && screenOf(sel.sid), w = s && sel.wid ? widgetOf(sel.sid, sel.wid) : null;
-  if (sel && (!s || (sel.wid && !w))) sel = null;
-  const f = !sel ? null : w ? stage.querySelector(`.widget[data-wid="${w.id}"]`) : stage.querySelector(`.screen[data-sid="${s.id}"]`);
-  if (f) f.classList.add('sel');
-  $('#selName').textContent = !sel ? 'Nothing selected' : w ? `Weather widget in “${s.name}”` : `Screen “${s.name}”`;
-  $('#screenTools').hidden = !(sel && !w);
-  $('#widgetTools').hidden = !w;
-  if (sel && !w && document.activeElement !== $('#screenName')) $('#screenName').value = s.name;
-  if (w) onTabs('mode', w.mode);
-  $('#del').disabled = !sel;
-}
-
-function select(next) { sel = next; renderSel(); }
-function setEdit(on) { $('#edit').checked = on; if (!on) sel = null; render(); }
-function selected() {
-  const s = sel && screenOf(sel.sid);
-  if (!s) return null;
-  return sel.wid ? { s, box: widgetOf(sel.sid, sel.wid), pw: s.w, ph: s.h } : { s, box: s, pw: WALL_W, ph: WALL_H };
-}
-function redraw(it) {
-  if (it.box === it.s) positionScreen(it.s);
-  else place(stage.querySelector(`.widget[data-wid="${it.box.id}"]`), it.box, it.pw, it.ph);
-}
-
-// drag to move, drag a corner handle to resize
-let drag = null;
-stage.addEventListener('pointerdown', e => {
-  if (!editing() || e.button > 0) return;
-  const f = e.target.closest('.frame');
-  if (!f) { select(null); return; }
-  select(f.dataset.wid ? { sid: f.dataset.sid, wid: f.dataset.wid } : { sid: f.dataset.sid });
-  const it = selected(), h = e.target.closest('.handle');
-  drag = Object.assign(it, { start: Object.assign({}, it.box), x: e.clientX, y: e.clientY, dir: h ? h.dataset.h : '', k: WALL_W / stage.clientWidth });
-  stage.setPointerCapture(e.pointerId);
-  e.preventDefault();
-});
-stage.addEventListener('pointermove', e => {
-  if (!drag) return;
-  moveResize(drag.box, drag.start, (e.clientX - drag.x) * drag.k, (e.clientY - drag.y) * drag.k, drag.dir, drag.pw, drag.ph);
-  redraw(drag);
-});
-const endDrag = () => { if (drag) { drag = null; saveLayout(); } };
-stage.addEventListener('pointerup', endDrag);
-stage.addEventListener('pointercancel', endDrag);
-
-document.addEventListener('keydown', e => {
-  if (!editing() || !sel || /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
-  if (e.key === 'Escape') { select(null); return; }
-  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
-  const D = { ArrowLeft: [-GRID, 0], ArrowRight: [GRID, 0], ArrowUp: [0, -GRID], ArrowDown: [0, GRID] }[e.key];
-  if (!D) return;
-  e.preventDefault();
-  const it = selected();
-  moveResize(it.box, Object.assign({}, it.box), D[0], D[1], e.shiftKey ? 'se' : '', it.pw, it.ph);
-  redraw(it); saveLayout();
-});
-
-function deleteSelected() {
-  const it = selected();
-  if (!it) return;
-  if (it.box === it.s) L.screens = L.screens.filter(s => s !== it.s);
-  else it.s.widgets = it.s.widgets.filter(w => w !== it.box);
-  sel = null; saveLayout(); buildStage();
-}
-
-$('#edit').onchange = () => setEdit(editing());
-$('#del').onclick = deleteSelected;
-$('#selParent').onclick = () => { if (sel) select({ sid: sel.sid }); };
-$('#screenName').oninput = e => { const it = selected(); if (!it) return; it.s.name = e.target.value.trim() || 'Screen'; positionScreen(it.s); saveLayout(); renderSel(); };
-$('#addScreen').onclick = () => {
-  const s = { id: uid(), name: 'Screen ' + (L.screens.length + 1), x: 480, y: 240, w: 320, h: 240, widgets: [] };
-  L.screens.push(s); sel = { sid: s.id }; $('#edit').checked = true; saveLayout(); buildStage();
-};
-$('#addWeather').onclick = () => {
-  let s = (sel && screenOf(sel.sid)) || L.screens[0];
-  if (!s) { $('#addScreen').click(); s = screenOf(sel.sid); }
-  const side = Math.max(MIN, snap(Math.min(s.w, s.h, 240)));
-  const w = { id: uid(), type: 'weather', mode: 'square', x: 0, y: 0, w: side, h: side };
-  s.widgets.push(w); sel = { sid: s.id, wid: w.id }; $('#edit').checked = true; saveLayout(); buildStage();
-};
-$('#mode').onclick = e => {
-  const b = e.target.closest('button'), it = selected();
-  if (!b || !it || it.box === it.s || it.box.mode === b.dataset.v) return;
-  const w = it.box; w.mode = b.dataset.v;
-  if (w.mode === 'rect') w.h = Math.max(MIN, snap(w.w / 4)); else w.w = w.h = Math.min(w.w, it.s.h);
-  positionScreen(it.s); saveLayout(); render();
-};
-$('#reset').onclick = e => {   // two taps instead of confirm(), which embedded pages can't show
-  const b = e.currentTarget, disarm = () => { delete b.dataset.armed; b.textContent = 'Reset layout'; };
-  clearTimeout(b._t);
-  if (b.dataset.armed) { disarm(); L = copy(DEFAULT_LAYOUT); sel = null; saveLayout(); buildStage(); return; }
-  b.dataset.armed = '1'; b.textContent = 'Tap again to reset';
-  b._t = setTimeout(disarm, 3000);
-};
-
-$('#conds').innerHTML = CONDS.map(([v, n]) => `<button class="chip" data-v="${v}">${svg(icon(v, false))}${n}</button>`).join('');
-$('#conds').onclick = e => { const b = e.target.closest('.chip'); if (b) { P.cond = b.dataset.v; render(); } };
-$('#shows').innerHTML = SHOW.map(([k, n]) => `<label class="row">${n}<input type="checkbox" class="switch" id="show-${k}"></label>`).join('');
-SHOW.forEach(([k]) => { const c = $(`#show-${k}`); c.checked = S.show[k]; c.onchange = () => { S.show[k] = c.checked; saveSettings(); render(); }; });
-$('#swatches').innerHTML = RINGS.map(c => `<button class="sw" style="--s:${c}" data-v="${c}" aria-label="Ring color ${c}"></button>`).join('');
-$('#swatches').onclick = e => { const b = e.target.closest('.sw'); if (b) { S.ring = b.dataset.v; saveSettings(); render(); } };
-for (const id of ['anchor', 'motion', 'icons']) $('#' + id).onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  S[id] = b.dataset.v; saveSettings(); if (id === 'motion') replay(); else render();
-};
-$('#source').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  P.source = b.dataset.v; if (P.source === 'live' && liveState === 'offline') fetchWeather(); render();
-};
-for (const id of ['temp', 'hum', 'hour']) { const r = $('#' + id); r.value = P[id]; r.oninput = () => { P[id] = +r.value; render(); }; }
-for (const id of ['thick', 'track', 'glow']) { const r = $('#' + id); r.value = S[id]; r.oninput = () => { S[id] = +r.value; saveSettings(); render(); }; }
-$('#name').value = S.name;
-$('#name').oninput = e => { S.name = e.target.value; saveSettings(); render(); };
-$('#replay').onclick = replay;
-if (document.fullscreenEnabled) $('#full').onclick = () => $('#wallWrap').requestFullscreen().catch(() => {});
-else $('#full').hidden = true;
-
-/* ---------- live weather + city search (Open-Meteo, free, no key) ---------- */
-async function fetchWeather() {
-  const c = S.city;
-  try {
-    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1`);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json(), cu = j.current;
-    if (c !== S.city) return;   // the city changed while this was loading
-    live = { cond: codeToCond(cu.weather_code), temp: Math.round(cu.temperature_2m), hum: Math.round(cu.relative_humidity_2m),
-      feels: Math.round(cu.apparent_temperature), hi: Math.round(j.daily.temperature_2m_max[0]), lo: Math.round(j.daily.temperature_2m_min[0]),
-      night: !cu.is_day, at: Date.now() };
-    liveState = 'live';
-  } catch (e) {
-    if (c !== S.city) return;
-    live = null; liveState = 'offline';
-  }
-  render();
-}
-
-let suggestions = [], searchTimer, searchN = 0;
-function showSugg(list, q) {
-  suggestions = list;
-  const ul = $('#sugg');
-  ul.hidden = !q;
-  ul.innerHTML = list.length ? list.map((c, i) => `<li><button type="button" data-i="${i}">${esc(c.name)} <span>· ${esc(c.admin)}</span></button></li>`).join('')
-    : `<li class="none">No city called “${esc(q)}” found</li>`;
-}
-async function searchCity(q) {
-  const n = ++searchN; let list;
-  try {
-    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    list = (j.results || []).map(x => ({ name: x.name, admin: [x.admin1, x.country_code].filter(Boolean).join(', '), lat: x.latitude, lon: x.longitude }));
-  } catch (e) {   // offline or blocked: search the built-in list instead
-    const ql = q.toLowerCase(); list = CITIES.filter(c => c.name.toLowerCase().includes(ql));
-  }
-  if (n === searchN) showSugg(list, q);
-}
-$('#city').value = S.city.name;
-$('#city').oninput = e => {
-  clearTimeout(searchTimer);
-  const q = e.target.value.trim();
-  if (q.length < 2) { showSugg([], ''); return; }
-  searchTimer = setTimeout(() => searchCity(q), 300);
-};
-$('#sugg').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  S.city = suggestions[+b.dataset.i]; $('#city').value = S.city.name; showSugg([], '');
-  saveSettings(); live = null; liveState = 'loading'; render(); fetchWeather();
-};
-
-// cheap self-check of the logic that's easy to break; results show in the browser console
-(function selfTest() {
-  const b = { x: 0, y: 0, w: 100, h: 100 };
-  moveResize(b, Object.assign({}, b), 13, -50, '', 200, 200);
-  console.assert(b.x === 16 && b.y === 0, 'move snaps to 8 px and stays inside', b);
-  moveResize(b, Object.assign({}, b), 500, 0, 'se', 200, 200);
-  console.assert(b.x === 16 && b.w === 184, 'resize stops at the parent edge', b);
-  moveResize(b, Object.assign({}, b), 500, 0, 'nw', 200, 200);
-  console.assert(b.w === MIN && b.x === 152, 'resize keeps the minimum size', b);
-  console.assert(['clear', 'partly', 'cloud', 'fog', 'rain', 'rain', 'cloud', 'thunder'].join() ===
-    [0, 2, 3, 45, 63, 81, 73, 96].map(codeToCond).join(), 'weather codes map to icons');
-})();
-
-buildStage();
-fetchWeather();
-setInterval(fetchWeather, 10 * 60 * 1000);
-setInterval(() => { if (P.source === 'live') render(); }, 60 * 1000);   // greeting follows the clock
-</script>
+<script src="wall.js"></script>
+<script src="widgets/weather.js"></script>
+<script src="widgets/clock.js"></script>
+<script src="widgets/date.js"></script>
+<script src="widgets/sky.js"></script>
+<script src="widgets/hourly.js"></script>
+<script>BearWall.boot();</script>
