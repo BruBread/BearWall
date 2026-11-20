@@ -1,0 +1,19 @@
+# Private values (projector and PC IPs, home city, names) live here, never in code
+local.json
+.env
+
+# Android build output
+build/
+.gradle/
+local.properties
+*.apk
+
+# Python
+__pycache__/
+.venv/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
