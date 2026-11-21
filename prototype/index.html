@@ -43,6 +43,9 @@
           <div class="sub">Exactly what the projector shows. Black is no light, so widgets float on the wall.</div>
         </div>
         <div class="btns">
+          <span class="insidename" id="insideName" hidden></span>
+          <button class="btn quiet" id="backWall" hidden>← Back to wall</button>
+          <button class="btn quiet" id="winBtn" title="Turn the window section(s) into a live window onto the sky outside">Window</button>
           <button class="btn quiet" id="replay">Replay intro</button>
           <button class="btn" id="full">Fullscreen</button>
         </div>
@@ -109,6 +112,10 @@
             <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
           </div>
           <div class="lbl"><span>Show when</span></div>
+          <div id="wSectionRow" hidden>
+            <div class="lbl"><span>Section</span></div>
+            <select class="field" id="wSection" aria-label="Section this widget lives in"></select>
+          </div>
           <div class="tabs" id="wWhen"><button data-v="always">Always</button><button data-v="laptop">Laptop connected</button><button data-v="phone">Phone connected</button></div>
           <div id="widgetOpts"></div>
 
@@ -116,6 +123,25 @@
         </div>
 
         <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Its colors are in the Look card, warping in the Warp card.</div>
+      </section>
+
+      <section class="glass" aria-label="Sections">
+        <h2>Sections</h2>
+        <div class="sub">Areas of the picture, each on its own surface. Click one on the wall (or here) to move it, hold Shift to warp it onto the real surface, double-click it to go inside and place its widgets.</div>
+        <div class="tabs wrap" id="secList"></div>
+        <div class="actions"><button class="btn quiet" id="secAdd">Add section</button></div>
+        <div id="secTools" hidden>
+          <div class="lbl"><span>Name</span></div>
+          <input class="field" id="secName" maxlength="32" autocomplete="off" aria-label="Section name">
+          <div class="lbl"><span>Background</span></div>
+          <div class="tabs" id="secBg"></div>
+          <div id="secBgOpts"></div>
+          <div class="note" id="secNote"></div>
+          <div class="actions">
+            <button class="btn quiet" id="secInside">Go inside</button>
+            <button class="btn danger" id="secDel">Delete section</button>
+          </div>
+        </div>
       </section>
 
       <section class="glass">
@@ -176,4 +202,10 @@
 <script src="widgets/pc.js"></script>
 <script src="widgets/pc-stats.js"></script>
 <script src="widgets/pc-onair.js"></script>
+<script src="widgets/alerts-pasok.js"></script>
+<script src="widgets/weather-radar.js"></script>
+<script src="widgets/weather-storm.js"></script>
+<script src="widgets/weather-tide.js"></script>
+<script src="widgets/photos.js"></script>
+<script src="backgrounds/window.js"></script>
 <script>BearWall.boot();</script>
