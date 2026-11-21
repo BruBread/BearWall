@@ -15,7 +15,7 @@
   </header>
 
   <div class="top">
-    <div class="col">
+    <div class="col left">
     <section class="glass side" aria-label="Motion for all widgets">
       <h2>Motion</h2>
       <div class="sub">Applies to every widget.</div>
@@ -52,7 +52,7 @@
         </div>
       </div>
     </section>
-    <div class="col">
+    <div class="col right">
     <section class="glass side" aria-label="Warp">
       <h2>Warp</h2>
       <div class="sub" id="warpState">Select a widget on the wall, then hold Shift to warp it.</div>
@@ -86,59 +86,61 @@
       </div>
     </section>
     </div>
-  </div>
+    <div class="grid">
+      <section class="glass">
+        <h2>Selected widget</h2>
+        <div class="sub">Click a widget to move it or drag its corners to resize it. Hold Shift to warp it to the wall's angle. Click empty wall to see it clean, exactly as the projector shows it.</div>
+        <div class="lbl"><span>Selected</span></div>
+        <div class="selname" id="selName">Nothing selected</div>
 
-  <div class="grid">
-    <section class="glass">
-      <h2>Layout</h2>
-      <div class="sub">Click a widget to move it or drag its corners to resize it. Hold Shift to warp it to the wall's angle. Click empty wall to see it clean, exactly as the projector shows it.</div>
-      <div class="lbl"><span>Selected</span></div>
-      <div class="selname" id="selName">Nothing selected</div>
+        <div id="widgetTools" hidden>
+          <div class="lbl"><span>Style</span></div>
+          <div class="tabs wrap" id="wStyle"></div>
+          <div class="lbl"><span>Shape</span></div>
+          <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
+          <div id="anchorRow">
+            <div class="lbl"><span>Hug corner</span></div>
+            <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
+          </div>
+          <div id="widgetOpts"></div>
 
-      <div id="widgetTools" hidden>
-        <div class="lbl"><span>Shape</span></div>
-        <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
-        <div id="anchorRow">
-          <div class="lbl"><span>Hug corner</span></div>
-          <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
+          <div class="actions"><button class="btn danger" id="del">Delete widget</button></div>
         </div>
-        <div id="widgetOpts"></div>
 
-        <div class="actions"><button class="btn danger" id="del">Delete widget</button></div>
-      </div>
+        <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Its colors are in the Look card, warping in the Warp card.</div>
+      </section>
 
-      <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Its colors are in the Look card, warping in the Warp card.</div>
-    </section>
+      <section class="glass">
+        <h2>Weather</h2>
+        <div class="sub">Live reads Open-Meteo every 10 minutes. Sample lets you preview any condition and time of day.</div>
+        <div class="lbl"><span>Source</span></div>
+        <div class="tabs" id="source"><button data-v="live">Live</button><button data-v="sample">Sample</button></div>
+        <div id="sample" hidden>
+          <div class="lbl"><span>Condition</span></div>
+          <div class="chips" id="conds"></div>
+          <div class="lbl"><span>Temperature</span><span id="tempVal"></span></div>
+          <input type="range" id="temp" min="18" max="38" step="1" aria-label="Temperature">
+          <div class="lbl"><span>Humidity</span><span id="humVal"></span></div>
+          <input type="range" id="hum" min="0" max="100" step="1" aria-label="Humidity">
+          <div class="lbl"><span>Time of day</span><span id="hourVal"></span></div>
+          <input type="range" id="hour" min="0" max="23.75" step=".25" aria-label="Time of day">
+        </div>
+      </section>
 
-    <section class="glass">
-      <h2>Weather</h2>
-      <div class="sub">Live reads Open-Meteo every 10 minutes. Sample lets you preview any condition and time of day.</div>
-      <div class="lbl"><span>Source</span></div>
-      <div class="tabs" id="source"><button data-v="live">Live</button><button data-v="sample">Sample</button></div>
-      <div id="sample" hidden>
-        <div class="lbl"><span>Condition</span></div>
-        <div class="chips" id="conds"></div>
-        <div class="lbl"><span>Temperature</span><span id="tempVal"></span></div>
-        <input type="range" id="temp" min="18" max="38" step="1" aria-label="Temperature">
-        <div class="lbl"><span>Humidity</span><span id="humVal"></span></div>
-        <input type="range" id="hum" min="0" max="100" step="1" aria-label="Humidity">
-        <div class="lbl"><span>Time of day</span><span id="hourVal"></span></div>
-        <input type="range" id="hour" min="0" max="23.75" step=".25" aria-label="Time of day">
-      </div>
-    </section>
-
-    <section class="glass">
-      <h2>Location &amp; greeting</h2>
-      <div class="sub">Search any city. Suggestions come from Open-Meteo's free city search.</div>
-      <div class="lbl"><span>City</span></div>
-      <input class="field" id="city" aria-label="City" autocomplete="off" spellcheck="false">
-      <ul class="sugg" id="sugg" hidden></ul>
-      <div class="lbl"><span>Your name in the greeting</span></div>
-      <input class="field" id="name" placeholder="Optional" maxlength="24" autocomplete="off" aria-label="Name in greeting">
-    </section>
+      <section class="glass">
+        <h2>Location &amp; greeting</h2>
+        <div class="sub">Search any city. Suggestions come from Open-Meteo's free city search.</div>
+        <div class="lbl"><span>City</span></div>
+        <input class="field" id="city" aria-label="City" autocomplete="off" spellcheck="false">
+        <ul class="sugg" id="sugg" hidden></ul>
+        <div class="lbl"><span>Your name in the greeting</span></div>
+        <input class="field" id="name" placeholder="Optional" maxlength="24" autocomplete="off" aria-label="Name in greeting">
+      </section>
 
 
+    </div>
   </div>
+
 </main>
 
 <script src="wall.js"></script>

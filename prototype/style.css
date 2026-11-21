@@ -38,9 +38,12 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 /* ---------- the wall ---------- */
 /* .stage is the projector's whole picture (1280 x 720). Each widget can have its own 4-corner warp. */
 /* top row: Motion | the wall | Warp. Narrower screens put the wall first and the two side cards under it. */
-.top { display: grid; grid-template-columns: 230px minmax(0, 1fr) 250px; gap: 18px; align-items: start; margin-bottom: 18px; }
-@media (max-width: 1199px) { .top { grid-template-columns: 1fr 1fr; } .top .stage-card { grid-column: 1 / -1; order: -1; } }
-@media (max-width: 640px) { .top { grid-template-columns: 1fr; } }
+/* wide: Motion + Add | the wall, with the settings cards under it | Warp + Look */
+.top { display: grid; grid-template-columns: 230px minmax(0, 1fr) 250px; grid-template-rows: auto 1fr; grid-template-areas: "l s r" "l g r"; gap: 18px; align-items: start; margin-bottom: 18px; }
+.top > .left { grid-area: l; } .top > .right { grid-area: r; } .top > .stage-card { grid-area: s; } .top > .grid { grid-area: g; }
+.top > .grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+@media (max-width: 1199px) { .top { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-template-areas: "s s" "l r" "g g"; } }
+@media (max-width: 639px) { .top { grid-template-columns: 1fr; grid-template-areas: "s" "l" "r" "g"; } }
 .side .tabs { display: grid; grid-template-columns: 1fr 1fr; border-radius: 22px; }
 .top > .col { display: grid; gap: 18px; align-content: start; min-width: 0; }
 .side .gallery { grid-template-columns: 1fr 1fr; }
@@ -52,6 +55,8 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 .cpick::-moz-color-swatch { border: 2px solid #fff; border-radius: 50%; }
 .cpick:focus-visible { outline: 3px solid #fff8; outline-offset: 2px; }
 .actions.col { flex-direction: column; }
+.tabs.wrap { flex-wrap: wrap; border-radius: 22px; }
+.tabs.wrap button { flex: 1 1 28%; }
 .actions.col .btn { width: 100%; }
 .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .stage-head .btns { display: flex; gap: 8px; flex-wrap: wrap; }

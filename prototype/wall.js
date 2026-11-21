@@ -8,6 +8,8 @@
  * BearWall.register({
  *   type: 'clock',                    // unique id, stored as widget.type in the layout
  *   name: 'Clock',                    // label in the "Add widget" menu
+ *   family: 'clock',                  // optional: makes this module a style of the 'clock' widget instead of its own widget
+ *   styleName: 'Date',                // its tab in the Style row (a parent without a `style` option uses its own styleName)
  *   size: { square: [240, 240], rect: [464, 104] },   // default box in wall px for each mode
  *   options: [                        // per-widget settings, shown in the Layout card when the widget is selected
  *     { key: 'style', label: 'Style', type: 'tabs', choices: [['digital', 'Digital'], ['analog', 'Analog']], value: 'digital' },
@@ -333,7 +335,7 @@ function drawWarpUI() {
   $('#undo').disabled = !undo.length;
   $('#flatten').disabled = !(w && w.quad);
   $('#warpState').textContent = !w ? 'Select a widget on the wall, then hold Shift to warp it.'
-    : on ? `Warping ${types[w.type].name}. Drag the colored corners.` : `Hold Shift to warp ${types[w.type].name}.`;
+    : on ? `Warping ${parentOf(types[w.type]).name}. Drag the colored corners.` : `Hold Shift to warp ${parentOf(types[w.type]).name}.`;
   if (!w) { $('#readout').textContent = '–'; return; }
   const q = quadOf(w), pct = (x, y) => [x / WALL_W * 100 + '%', y / WALL_H * 100 + '%'];
   $('#readout').textContent = `${CORNERS[corner]} · ${q[corner].map(Math.round).join(', ')}`;
@@ -468,12 +470,13 @@ function renderSel() {
   const w = selW();
   if (!w || !known(w)) sel = null;
   if (sel) wallEl.querySelector(`.widget[data-wid="${w.id}"]`).classList.add('sel');
-  $('#selName').textContent = sel ? types[w.type].name + (w.quad ? ' · warped' : '') : 'Nothing selected · click a widget on the wall';
+  $('#selName').textContent = sel ? styleTitle(w) + (w.quad ? ' · warped' : '') : 'Nothing selected · click a widget on the wall';
   $('#widgetTools').hidden = !sel;
   renderLook(sel ? w : null);
   if (sel) {
     onTabs('mode', w.mode); onTabs('wAnchor', w.anchor);
     $('#anchorRow').hidden = w.mode !== 'rect';
+    renderStyles(w);
     renderOpts(w);
 
   }
@@ -482,7 +485,7 @@ function renderSel() {
 // the Look card: colors (picker + presets), ring sizes and icon colors of the selected widget
 function renderLook(w) {
   $('#lookTools').hidden = !w;
-  $('#lookState').textContent = w ? `${types[w.type].name}'s own colors and ring.` : 'Select a widget to change its look.';
+  $('#lookState').textContent = w ? `${parentOf(types[w.type]).name}'s own colors and ring.` : 'Select a widget to change its look.';
   if (!w) return;
   const look = w.look;
   document.querySelectorAll('.colorrow').forEach(row => {
@@ -505,9 +508,9 @@ function setLook(k, v) {
   renderLook(w);
 }
 
-// the Add gallery: a live, still preview of every widget type
+// the Add gallery: a live, still preview of every widget (styles of a widget are picked after adding it)
 function buildGallery() {
-  $('#gallery').innerHTML = Object.values(types).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="wgt" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"></div></div>${esc(m.name)}</button>`).join('');
+  $('#gallery').innerHTML = Object.values(types).filter(m => !m.family).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="wgt" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"></div></div>${esc(m.name)}</button>`).join('');
   $('#gallery').querySelectorAll('.gitem').forEach(b => {
     const el = b.querySelector('.wgt');
     new ResizeObserver(() => { el.style.setProperty('--u', Math.min(el.offsetWidth, el.offsetHeight) / 100 + 'px'); renderGallery(); }).observe(el);
@@ -522,7 +525,35 @@ function renderGallery(now = timeNow(), weather = weatherNow(now)) {
   });
 }
 
-// per-widget settings, drawn from the module's `options`
+// Styles: a widget's own `style` choices plus every module that names it as its `family`.
+const parentOf = m => (m.family && types[m.family]) || m;
+function stylesOf(p) {
+  const own = (p.options || []).find(o => o.key === 'style' && o.type === 'tabs');
+  const list = own ? own.choices.map(([v, n]) => ({ label: n, type: p.type, style: v })) : [{ label: p.styleName || p.name, type: p.type }];
+  return list.concat(Object.values(types).filter(m => m.family === p.type).map(m => ({ label: m.styleName || m.name, type: m.type })));
+}
+const activeStyle = (list, w) => list.findIndex(s => s.type === w.type && (s.style == null || s.style === w.opts.style));
+function styleTitle(w) {
+  const p = parentOf(types[w.type]), list = stylesOf(p), s = list[activeStyle(list, w)];
+  return p.name + (list.length > 1 && s ? ' · ' + s.label : '');
+}
+function renderStyles(w) {
+  const box = $('#wStyle'), p = parentOf(types[w.type]);
+  if (box._for !== p.type) { box._for = p.type; box._list = stylesOf(p); box.innerHTML = box._list.map((s, i) => `<button data-i="${i}">${esc(s.label)}</button>`).join(''); }
+  const act = activeStyle(box._list, w);
+  box.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === act));
+}
+// switch style in place: keeps position, size, look and warp
+function setStyle(s) {
+  const w = selW();
+  if (!w) return;
+  if (s.type !== w.type) w.opts = defaultOpts(types[s.type]);
+  w.type = s.type;
+  if (s.style != null) w.opts.style = s.style;
+  saveLayout(); buildStage();
+}
+
+// per-widget settings, drawn from the module's `options` (a `style` tabs option is shown in the Style row instead)
 function optHTML(o) {
   const k = esc(o.key), label = esc(o.label);
   if (o.type === 'tabs') return `<div class="lbl"><span>${label}</span></div><div class="tabs" data-k="${k}">${o.choices.map(([v, n]) => `<button data-v="${esc(v)}">${esc(n)}</button>`).join('')}</div>`;
@@ -532,7 +563,7 @@ function optHTML(o) {
   return `<div class="lbl"><span>${label}</span></div><input class="field" type="${type}" data-k="${k}" maxlength="40" autocomplete="off" aria-label="${label}">`;
 }
 function renderOpts(w) {
-  const box = $('#widgetOpts'), opts = types[w.type].options || [];
+  const box = $('#widgetOpts'), opts = (types[w.type].options || []).filter(o => !(o.key === 'style' && o.type === 'tabs'));
   const key = w.id + ':' + w.type;   // rebuild when the widget or its type changes
   if (box._for !== key) { box._for = key; box.innerHTML = opts.map(optHTML).join(''); }
   for (const o of opts) {
@@ -679,6 +710,7 @@ function bindControls() {
   });
   for (const k of ['thick', 'track', 'glow']) $('#w' + k[0].toUpperCase() + k.slice(1)).oninput = e => setLook(k, +e.target.value);
   $('#wIcons').onclick = e => { const b = e.target.closest('button'); if (b) setLook('icons', b.dataset.v); };
+  $('#wStyle').onclick = e => { const b = e.target.closest('button'), list = $('#wStyle')._list; if (b && list) setStyle(list[+b.dataset.i]); };
   $('#mode').onclick = e => {
     const b = e.target.closest('button'), w = selW();
     if (!b || !w || w.mode === b.dataset.v) return;

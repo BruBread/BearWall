@@ -5,7 +5,7 @@ const greeting = (h, name) => (h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h 
 
 BearWall.register({
   type: 'weather',
-  name: 'Weather',
+  name: 'Weather', styleName: 'Now',
   size: { square: [264, 264], rect: [488, 104] },
   options: [
     { key: 'feels', label: 'Feels like', type: 'switch', value: false },

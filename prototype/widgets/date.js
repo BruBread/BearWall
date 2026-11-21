@@ -37,7 +37,7 @@ const caption = (kind, now) => ({ day: 'of today', awake: 'of waking hours', wee
 
 BearWall.register({
   type: 'date',
-  name: 'Date & progress',
+  name: 'Date & progress', family: 'clock', styleName: 'Date',
   size: { square: [264, 264], rect: [488, 104] },
   options: [
     { key: 'progress', label: 'Progress through', type: 'tabs', value: 'day',

@@ -28,7 +28,7 @@ function fitCells(wrap, sel, v, room) {
 
 BearWall.register({
   type: 'hourly',
-  name: 'Hourly forecast',
+  name: 'Hourly forecast', family: 'weather', styleName: 'Hourly',
   size: { square: [384, 264], rect: [488, 104] },
   options: [
     { key: 'hours', label: 'Hours ahead', type: 'tabs', choices: [['6', '6 h'], ['12', '12 h']], value: '6' },

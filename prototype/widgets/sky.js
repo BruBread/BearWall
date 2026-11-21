@@ -21,7 +21,7 @@ console.assert(moonPhase(NEW_MOON).illum < .01 && moonPhase(NEW_MOON).name === '
 
 BearWall.register({
   type: 'sky',
-  name: 'Sun & moon',
+  name: 'Sun & moon', family: 'clock', styleName: 'Sun & moon',
   size: { square: [264, 264], rect: [488, 104] },
   options: [
     { key: 'times', label: 'Sunrise and sunset times', type: 'switch', value: true },
