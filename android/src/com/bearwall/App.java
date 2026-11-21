@@ -12,5 +12,6 @@ public class App extends Application {
         Health.onBoot(this);
         server = new Server(this);
         server.start();
+        server.lights.start();
     }
 }

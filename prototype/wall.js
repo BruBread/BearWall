@@ -1459,6 +1459,7 @@ function listen() {
   es.onmessage = e => {
     if (e.data === 'reload') return updatingNow ? setTimeout(() => location.reload(), 900) : location.reload();   // let "Restarting" show
     if (e.data.startsWith('updating:')) return WALL_ONLY && onUpdating(e.data.slice(9));
+    if (e.data === 'lights') return window.BearWallLights && BearWallLights.refresh();   // the bulb changed (Lights.java)
     if (e.data.startsWith('live:')) {   // live:<client>:<json>
       const rest = e.data.slice(5), json = rest.slice(rest.indexOf(':') + 1);
       try { remote = JSON.parse(json) || {}; } catch (err) { remote = {}; }
@@ -1504,7 +1505,11 @@ async function loadShared() {
 
 window.BearWall = {
   util,
-  toggleWindow: () => toggleWindow(),   // the remote's MENU button (the app calls this)
+  onProjector: ON_PROJECTOR,   // served by the projector app (else the plain prototype)
+  toggleWindow: () => toggleWindow(),
+  // the remote's Light mode (the app calls these; lights.js does the work)
+  lightMode: on => window.BearWallLights && BearWallLights.mode(on),
+  lightKey: k => window.BearWallLights && BearWallLights.key(k),   // the remote's MENU button (the app calls this)
   // feeds a page can't fetch itself (news for Walang Pasok); only the projector app can do this
   proxy: ON_PROJECTOR ? url => fetch('/api/proxy?url=' + encodeURIComponent(url)).then(r => { if (!r.ok) throw new Error('proxy ' + r.status); return r.text(); }) : undefined,
   register(m) {

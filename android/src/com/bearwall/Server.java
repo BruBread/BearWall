@@ -34,6 +34,7 @@ import java.util.zip.ZipInputStream;
  *   GET  /wall, /control       the page (the projector shows /wall; your laptop opens /control)
  *   GET/PUT /api/kv/{key}      saved state: layout, settings, devices, installed (JSON files)
  *   GET  /api/events           Server-Sent Events: "kv:{key}:{client}" after a save, "updating:{stage}" during an update, "reload" after it
+ *   GET  /api/lights           the bulb: light, scenes, schedules, status (POST .../light, scene, scene/save, settings, setup, laptop)
  *   GET  /api/system           the projector's stats (Health.java)
  *   GET  /api/proxy?url=       fetches news / storm feeds and the GitHub commit feed for the page (only the hosts listed in PROXY_HOSTS)
  *   PUT/GET/DELETE /api/photos/{id}   uploaded photos
@@ -59,6 +60,7 @@ class Server {
     volatile String okIp = null;     // the paired laptop that's allowed in right now
     volatile long okUntil = 0;
     final ExecutorService pool = Executors.newCachedThreadPool();
+    final Lights lights;
 
     Server(Context c) {
         this.c = c;
@@ -67,6 +69,7 @@ class Server {
         photos = new File(c.getFilesDir(), "photos");
         kv.mkdirs();
         photos.mkdirs();
+        lights = new Lights(c.getFilesDir(), this);
     }
 
     void start() {
@@ -220,6 +223,7 @@ class Server {
             } else reply(out, 200, "application/json", Files.read(f, "null"));
             return false;
         }
+        if (path.startsWith("/api/lights")) { lightsRoute(m, path, body, out); return false; }
         if (path.equals("/api/system")) { reply(out, 200, "application/json", Health.system(c)); return false; }
         if (path.equals("/api/proxy")) { proxy(out, query); return false; }
         if (path.startsWith("/api/photos/")) {
@@ -251,6 +255,25 @@ class Server {
         if (!f.getCanonicalPath().startsWith(web.getCanonicalPath() + File.separator)) { reply(out, 403, "text/plain", "no"); return false; }
         file(out, f);
         return false;
+    }
+
+    /** The bulb (Lights.java). Bad input = 400; the key is never sent back. */
+    void lightsRoute(String m, String path, byte[] body, OutputStream out) throws IOException {
+        try {
+            if (path.equals("/api/lights") && m.equals("GET")) { reply(out, 200, "application/json", lights.state()); return; }
+            if (!m.equals("POST")) { reply(out, 405, "text/plain", "POST only"); return; }
+            org.json.JSONObject b = new org.json.JSONObject(body.length == 0 ? "{}" : new String(body, StandardCharsets.UTF_8));
+            switch (path) {
+                case "/api/lights/light": lights.setLight(Lights.clean(b), true); break;
+                case "/api/lights/scene": lights.scene(b.getInt("i")); break;
+                case "/api/lights/scene/save": lights.saveScene(b.getInt("i")); break;
+                case "/api/lights/settings": lights.settings(b); break;
+                case "/api/lights/setup": lights.setup(b); break;
+                case "/api/lights/laptop": lights.laptop(b.getBoolean("locked")); break;
+                default: reply(out, 404, "text/plain", "not found"); return;
+            }
+            reply(out, 200, "application/json", lights.state());
+        } catch (org.json.JSONException e) { reply(out, 400, "application/json", "{\"ok\":false}"); }
     }
 
     static String clean(String s) { return s == null ? "" : s.replaceAll("[^a-z0-9]", ""); }

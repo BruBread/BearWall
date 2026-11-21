@@ -24,7 +24,7 @@ import java.io.File;
 
 /**
  * The projector's home screen: the wall, fullscreen, from the app's own server.
- * Remote: MENU toggles Window mode, SETTINGS opens a small app menu. Back never leaves the wall, and the POWER key
+ * Remote: MENU toggles Window mode, SETTINGS opens a small app menu, F9 (the light button) toggles Light mode. Back never leaves the wall, and the POWER key
  * is left alone (a root daemon on the projector handles it). In sleep mode (Lcd_en = 0) the wall hides and pauses; waking replays the intro.
  */
 public class WallActivity extends Activity {
@@ -100,9 +100,51 @@ public class WallActivity extends Activity {
 
     @Override public void onBackPressed() { /* the wall is home: Back never leaves it */ }
 
+    // Light mode: the remote drives the room's bulb (lights.js on the page does the work). F9 = the remote's light
+    // button (scan 187, remapped from F6 in the key layout). Volume keys are taken only while it's on.
+    boolean lightMode;
+    final Runnable lightIdle = new Runnable() { public void run() { setLightMode(false); } };
+
+    void setLightMode(boolean on) {
+        lightMode = on;
+        ui.removeCallbacks(lightIdle);
+        if (on) ui.postDelayed(lightIdle, 10000);   // closes itself after 10 s without a press
+        wv.evaluateJavascript("window.BearWall && BearWall.lightMode && BearWall.lightMode(" + on + ")", null);
+    }
+
+    static String lightKey(int k) {
+        switch (k) {
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "left";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "right";
+            case KeyEvent.KEYCODE_DPAD_UP: return "up";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "down";
+            case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER: return "ok";
+            case KeyEvent.KEYCODE_VOLUME_UP: return "volup";
+            case KeyEvent.KEYCODE_VOLUME_DOWN: return "voldown";
+            default: return null;
+        }
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
+        boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
+        if (k == KeyEvent.KEYCODE_F9) {
+            if (down && e.getRepeatCount() == 0) setLightMode(!lightMode);
+            return true;
+        }
+        if (lightMode) {
+            String key = lightKey(k);
+            if (k == KeyEvent.KEYCODE_BACK) { if (down) setLightMode(false); return true; }
+            if (key != null) {
+                // volume repeats while held (brightness keeps going); the rest act once per press
+                if (down && (e.getRepeatCount() == 0 || key.startsWith("vol"))) {
+                    setLightMode(true);   // restarts the idle timer
+                    wv.evaluateJavascript("window.BearWall && BearWall.lightKey && BearWall.lightKey('" + key + "')", null);
+                }
+                return true;
+            }
+        }
         if (k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_SETTINGS) {
             if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
                 if (k == KeyEvent.KEYCODE_MENU) wv.evaluateJavascript("window.BearWall && BearWall.toggleWindow && BearWall.toggleWindow()", null);

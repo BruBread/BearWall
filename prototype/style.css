@@ -261,3 +261,29 @@ select.field option { background: #24183f; color: var(--text); }
 .wallmode .section.remote-sel { outline: 3px dashed var(--c); outline-offset: -3px; }   /* selected on the control page */
 .wallmode .section.remote-sel::before { content: attr(data-label); position: absolute; z-index: 3; left: 6px; top: 6px; font: 800 18px var(--ui); white-space: nowrap; padding: 3px 10px; border-radius: 8px; background: #000d; color: var(--c); border: 1px solid var(--c); }
 .wallmode .section.remote-warp { background-image: linear-gradient(#ffffff55 1px, transparent 1px), linear-gradient(90deg, #ffffff55 1px, transparent 1px); background-size: 12.5% 12.5%; box-shadow: inset 0 0 0 2px #fff; }
+
+/* ---------- Lights page (lights.js) ---------- */
+#pageTabs { min-width: 220px; }
+.lights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+.lswatch { height: 54px; border-radius: 18px; margin-top: 14px; border: 1px solid var(--line); transition: background .3s; }
+input.hue { accent-color: #fff; background: linear-gradient(90deg, red, #ff0, lime, cyan, blue, #f0f, red); border-radius: 99px; height: 10px; }
+.lscenes { display: grid; gap: 8px; margin-top: 12px; }
+.lscene { display: flex; gap: 8px; }
+.lscene > button:first-child { flex: 1; text-align: left; border: 1px solid var(--line); background: #ffffff10; border-radius: 16px; padding: 11px 14px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.lscene > button:first-child i { width: 16px; height: 16px; border-radius: 50%; background: var(--sw); box-shadow: 0 0 10px var(--sw); flex: none; }
+.lscene.on > button:first-child { background: #fff; color: #1b1035; }
+.ltime { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); font-weight: 700; padding: 4px 0 10px; }
+.ltime .field { width: auto; padding: 6px 8px; }
+.ltime input[type=number] { width: 64px; }
+
+/* Light mode on the wall: transform/opacity only */
+.lhud { position: fixed; left: 50%; bottom: 7vh; z-index: 50; width: min(380px, 80vw); padding: 14px 18px; border-radius: 18px; background: #000d; border: 1px solid #ffffff2a;
+  color: #f4f7ff; font-family: var(--mono); pointer-events: none; opacity: 0; transform: translate(-50%, 16px); transition: opacity .25s, transform .25s; }
+.lhud.on { opacity: 1; transform: translate(-50%, 0); }
+.lhud b { font-size: 12px; letter-spacing: .2em; color: #bff4ff; }
+.lhud .lrow { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 18px; font-weight: 700; font-family: var(--ui); }
+.lhud .ldot { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+.lhud .lpct { margin-left: auto; font-family: var(--mono); }
+.lhud .lbar { height: 6px; border-radius: 99px; background: #ffffff1f; overflow: hidden; }
+.lhud .lbar i { display: block; height: 100%; background: #bff4ff; transform-origin: left; transition: transform .2s; }
+.lhud small { display: block; margin-top: 8px; font-size: 11px; opacity: .6; }

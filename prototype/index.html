@@ -11,8 +11,10 @@
 <main>
   <header>
     <h1>Bear<span>Wall</span></h1>
+    <div class="tabs" id="pageTabs"><button data-v="wall">Wall</button><button data-v="lights">Lights</button></div>
     <span class="pill" id="status"><i></i><span id="statusText">Loading weather…</span></span>
   </header>
+  <div id="lightsPage" hidden></div>
 
   <div class="top">
     <div class="col left">
@@ -210,4 +212,6 @@
 <script src="widgets/projector.js"></script>
 <script src="widgets/photos.js"></script>
 <script src="backgrounds/window.js"></script>
+<script src="lights.js"></script>
+<script src="widgets/lights.js"></script>
 <script>BearWall.boot();</script>

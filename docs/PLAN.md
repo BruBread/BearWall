@@ -160,9 +160,11 @@ The list below is the original idea list. Some items are now styles of a family.
 ## Projector side (handled in Hy300-Root)
 
 - **Sleep** turns `Lcd_en` off, then `Lcd_power` (only `Lcd_power` turns the LED off). `Lcd_en = 0` is still the signal the wall watches to hide and pause.
-- **The power button** belongs to Hy300-Root's [`bearwall_power.sh`](https://github.com/BruBread/Hy300-Root/blob/main/scripts/bearwall_power.sh): short press sleeps or wakes, holding 3 s or more shuts down on release. The wall must not handle POWER.
+- **The power button** belongs to Hy300-Root's [`bearwall_power.sh`](https://github.com/BruBread/Hy300-Root/blob/main/scripts/bearwall_power.sh): short press sleeps or wakes, holding 2 s or more turns the picture 180°. The wall must not handle POWER.
 - **Never put Android to sleep** (`KEYCODE_SLEEP`, `goToSleep`). Deep suspend crashes the RK628 HDMI-in driver and hard-resets the projector. A wake lock set at boot keeps it from happening.
 - **The remote's window-mode button** is `KEY_MENU` (Linux code 139), which reaches the app as `KEYCODE_MENU`.
+- **The remote's light button** is Linux code 187. The stock layout maps it to `F6`, which opens the HDMI viewer; BearWall's layout maps it to `F9` instead, and `F9` toggles Light mode (the volume keys set the bulb's brightness only while it's on).
+- **The bulb** (Tuya, local protocol 3.5) is run by the app (`Lights.java`, `Tuya.java`): it finds the bulb at its last address or by trying port 6668 across the /24, keeps one session open, reads it every 10 s and spaces commands 0.4 s apart.
 
 ## Private values
 
