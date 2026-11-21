@@ -20,6 +20,8 @@
  *   ],                                // tabs/select values are strings; switch values are booleans
  *   every: 1000,                      // optional: also call update() every this many ms (a clock wants 1000)
  *   keepAspect: true,                 // optional: resizing keeps the box's proportions; Shift + resize changes them (crops)
+ *   look: ['ring', 'text', 'dim'],    // optional: which Look controls apply (ring, text, dim, thick, track, glow, icons),
+ *                                     //   or a function of opts; default all. lookLabels: { ring: 'Color' } renames them
  *   css: `.w-clock .digits { ... }`,  // injected once; scope every rule under .w-<type>
  *   mount(el, ctx) {},                // build your DOM inside el, once
  *   update(el, ctx) {},               // refresh from ctx: after mount, on any change, on resize, and every `every` ms
@@ -214,6 +216,7 @@ const CITIES = [
 const LOOK_KEYS = ['ring', 'text', 'dim', 'icon', 'thick', 'track', 'glow', 'icons'];
 // icons: 'natural' | 'white' | 'ring' | 'custom' (custom uses the `icon` color)
 const DEFAULT_LOOK = { ring: '#5ee6ff', text: '#f4f7ff', dim: '#a6a6a6', icon: '#ffd84d', thick: 9, track: .18, glow: .5, icons: 'natural' };
+const LOOK_ROWS = ['ring', 'text', 'dim', 'thick', 'track', 'glow', 'icons'];   // every Look control, in card order
 const COLOR_PRESETS = ['#5ee6ff', '#7dffa8', '#ffd84d', '#ff7ac6', '#b18cff', '#ffa24d', '#ff5e5e', '#5b8cff', '#ffffff', '#a6a6a6'];
 const DEFAULT_SETTINGS = { city: CITIES[0], name: '', motion: 'full' };
 
@@ -285,6 +288,8 @@ function normalize() {
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
     w.when = ['laptop', 'phone'].includes(w.when) ? w.when : 'always';
     if (known(w)) w.opts = Object.assign(defaultOpts(types[w.type]), w.opts);   // unknown types are kept but not shown
+    if (known(w)) for (const o of types[w.type].options || [])   // a saved choice that no longer exists (e.g. a removed style) goes back to the default
+      if (o.type === 'tabs' && !o.choices.some(([v]) => v === String(w.opts[o.key]))) w.opts[o.key] = o.value;
     w.look = Object.assign({}, DEFAULT_LOOK, oldLook, w.look);   // older saves had one look for the whole wall
   }
 }
@@ -621,9 +626,12 @@ function renderSel() {
 
 // the Look card: colors (picker + presets), ring sizes and icon colors of the selected widget
 function renderLook(w) {
-  $('#lookTools').hidden = !w;
-  $('#lookState').textContent = w ? `${parentOf(types[w.type]).name}'s own colors and ring.` : 'Select a widget to change its look.';
+  const m = w && types[w.type], keys = !m ? [] : typeof m.look === 'function' ? m.look(w.opts) : (m.look || LOOK_ROWS);
+  $('#lookTools').hidden = !w || !keys.length;
+  $('#lookState').textContent = !w ? 'Select a widget to change its look.' : keys.length ? `${parentOf(m).name}'s own look.` : 'This style uses its own colors.';
   if (!w) return;
+  document.querySelectorAll('#lookTools [data-lk]').forEach(el => { el.hidden = !keys.includes(el.dataset.lk); });   // only what this widget uses
+  $('#lkRing').textContent = (m.lookLabels && m.lookLabels.ring) || 'Ring';
   const look = w.look;
   document.querySelectorAll('.colorrow').forEach(row => {
     const v = look[row.dataset.look], pick = row.querySelector('.cpick');
@@ -689,6 +697,7 @@ function setStyle(s) {
   w.type = s.type;
   if (s.style != null) w.opts.style = s.style;
   saveLayout(); buildStage();
+  renderLook(w);
 }
 
 // per-widget settings, drawn from the module's `options` (a `style` tabs option is shown in the Style row instead)
@@ -784,6 +793,8 @@ function renderSections() {
   $('#winBtn').classList.toggle('on', !!L.windowOn);
   $('#winBtn').textContent = L.windowOn ? 'Window on' : 'Window';
   $('#backWall').hidden = !inside;
+  $('#secCard').hidden = !!inside;
+  $('#selCard').classList.toggle('wide', !!inside);
   $('#insideName').hidden = !inside;
   if (inside) $('#insideName').textContent = `Inside “${sectionOf(inside).name}”`;
   if (!s) return;

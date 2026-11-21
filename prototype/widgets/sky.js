@@ -20,6 +20,7 @@ console.assert(moonPhase(Date.UTC(2000, 0, 21)).illum > .95 && moonPhase(Date.UT
 console.assert(moonPhase(NEW_MOON).illum < .01 && moonPhase(NEW_MOON).name === 'New moon', 'sky: reference date is a new moon');
 
 BearWall.register({
+  look: ['text', 'dim', 'glow', 'icons'],
   type: 'sky',
   name: 'Sun & moon', family: 'clock', styleName: 'Sun & moon',
   size: { square: [264, 264], rect: [488, 104] },

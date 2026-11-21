@@ -8,6 +8,7 @@ const NOTE = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M16 28V10l15-
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 BearWall.register({
+  look: ['ring', 'text', 'dim', 'thick', 'track', 'glow'],
   type: 'pc', name: 'PC', styleName: 'Now playing', when: 'laptop',
   size: { square: [264, 264], rect: [488, 104] },
   every: 1000,

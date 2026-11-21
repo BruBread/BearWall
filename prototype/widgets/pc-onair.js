@@ -6,6 +6,7 @@ const MIC = '<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="14" y="6" widt
 const CAM = '<svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="12" width="22" height="16" rx="3"/><path d="M27 18l8-5v14l-8-5"/></svg>';
 
 BearWall.register({
+  look: ['text', 'dim', 'glow'],
   type: 'pc-onair', family: 'pc', name: 'On Air', styleName: 'On Air', when: 'laptop',
   size: { square: [264, 264], rect: [488, 104] },
   css: `

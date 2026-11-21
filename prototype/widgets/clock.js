@@ -99,6 +99,7 @@ console.assert(dateLine(new Date(2026, 10, 21)) === 'Sat 21 Nov' && tzLine(new D
   && tzLine(new Date(Date.UTC(2026, 0, 1)), 'America/New_York', false) === 'New York 7:00 PM', 'date and time zone lines');
 
 BearWall.register({
+  look: ['ring', 'text', 'dim', 'thick', 'track', 'glow'],
   type: 'clock',
   name: 'Clock',
   size: { square: [264, 264], rect: [488, 104] },

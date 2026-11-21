@@ -27,6 +27,7 @@ function fitCells(wrap, sel, v, room) {
 }
 
 BearWall.register({
+  look: ['ring', 'text', 'dim', 'icons'], lookLabels: { ring: 'Line color' },
   type: 'hourly',
   name: 'Hourly forecast', family: 'weather', styleName: 'Hourly',
   size: { square: [384, 264], rect: [488, 104] },

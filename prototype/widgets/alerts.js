@@ -11,6 +11,7 @@ const MARK = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20
 // One module per kind. `type` and `styleName` differ; the drawing is shared.
 BearWall.alertModule = (kind, type, styleName, name) => Object.assign({
   type, name, styleName,
+  look: ['text', 'dim', 'glow'],
   size: { square: [264, 264], rect: [488, 104] },
   every: 30000,
   mount(el) {
@@ -107,6 +108,7 @@ const net = Object.assign({}, base, {
 });
 
 BearWall.register(Object.assign(net, {
+  look: ['ring', 'text', 'dim', 'thick', 'track', 'glow'],
   css: `
     .w-alerts .sp { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center;
       column-gap: calc(var(--u) * 8); row-gap: calc(var(--u) * 4); opacity: .75; }

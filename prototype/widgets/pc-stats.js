@@ -4,6 +4,7 @@ const U = BearWall.util;
 const STATS = [['CPU', 32, 10, 7], ['GPU', 48, 15, 11], ['RAM', 61, 3, 23]];   // label, base %, swing, period (s)
 
 BearWall.register({
+  look: ['ring', 'text', 'dim', 'thick', 'track', 'glow'],
   type: 'pc-stats', family: 'pc', name: 'PC stats', styleName: 'PC stats', when: 'laptop',
   size: { square: [264, 264], rect: [488, 104] },
   every: 2000,

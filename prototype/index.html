@@ -78,28 +78,25 @@
       <h2>Look</h2>
       <div class="sub" id="lookState">Select a widget to change its look.</div>
       <div id="lookTools" hidden>
-        <div class="lbl"><span>Ring</span></div>
-        <div class="colorrow" data-look="ring"></div>
-        <div class="lbl"><span>Text</span></div>
-        <div class="colorrow" data-look="text"></div>
-        <div class="lbl"><span>Secondary text</span></div>
-        <div class="colorrow" data-look="dim"></div>
-        <div class="lbl"><span>Ring thickness</span><span id="wThickVal"></span></div>
-        <input type="range" id="wThick" min="4" max="16" step="1" aria-label="Ring thickness">
-        <div class="lbl"><span>Track brightness</span><span id="wTrackVal"></span></div>
-        <input type="range" id="wTrack" min="0" max=".5" step=".02" aria-label="Track brightness">
-        <div class="lbl"><span>Glow</span><span id="wGlowVal"></span></div>
-        <input type="range" id="wGlow" min="0" max="1" step=".05" aria-label="Glow">
-        <div class="lbl"><span>Icon colors</span></div>
-        <div class="tabs" id="wIcons"><button data-v="natural">Natural</button><button data-v="white">White</button><button data-v="ring">Ring</button><button data-v="custom">Custom</button></div>
-        <div class="colorrow" data-look="icon" id="iconRow"></div>
+        <div data-lk="ring"><div class="lbl"><span id="lkRing">Ring</span></div><div class="colorrow" data-look="ring"></div></div>
+        <div data-lk="text"><div class="lbl"><span>Text</span></div><div class="colorrow" data-look="text"></div></div>
+        <div data-lk="dim"><div class="lbl"><span>Secondary text</span></div><div class="colorrow" data-look="dim"></div></div>
+        <div data-lk="thick"><div class="lbl"><span>Ring thickness</span><span id="wThickVal"></span></div>
+          <input type="range" id="wThick" min="4" max="16" step="1" aria-label="Ring thickness"></div>
+        <div data-lk="track"><div class="lbl"><span>Track brightness</span><span id="wTrackVal"></span></div>
+          <input type="range" id="wTrack" min="0" max=".5" step=".02" aria-label="Track brightness"></div>
+        <div data-lk="glow"><div class="lbl"><span>Glow</span><span id="wGlowVal"></span></div>
+          <input type="range" id="wGlow" min="0" max="1" step=".05" aria-label="Glow"></div>
+        <div data-lk="icons"><div class="lbl"><span>Icon colors</span></div>
+          <div class="tabs" id="wIcons"><button data-v="natural">Natural</button><button data-v="white">White</button><button data-v="ring">Ring</button><button data-v="custom">Custom</button></div>
+          <div class="colorrow" data-look="icon" id="iconRow"></div></div>
       </div>
     </section>
     </div>
     <div class="grid">
-      <section class="glass">
+      <section class="glass" id="selCard">
         <h2>Selected widget</h2>
-        <div class="sub">Click a widget to move it or drag its corners to resize it. Hold Shift to warp it to the wall's angle. Click empty wall to see it clean, exactly as the projector shows it.</div>
+        <div class="sub">Click a widget to move it or drag its corners to resize it. Photos keep their shape; Shift + drag crops them. Click empty wall to see it clean, exactly as the projector shows it.</div>
         <div class="lbl"><span>Selected</span></div>
         <div class="selname" id="selName">Nothing selected</div>
 
@@ -124,7 +121,7 @@
         <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Its colors are in the Look card, warping in the Warp card.</div>
       </section>
 
-      <section class="glass" aria-label="Sections">
+      <section class="glass" aria-label="Sections" id="secCard">
         <h2>Sections</h2>
         <div class="sub">Areas of the picture, each on its own surface. Drag on the empty wall to draw one. Click it to move or resize it, hold Shift to warp it onto the real surface, double-click it to go inside and place its widgets.</div>
         <div class="tabs wrap" id="secList"></div>

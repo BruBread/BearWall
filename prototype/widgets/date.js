@@ -36,6 +36,7 @@ const caption = (kind, now) => ({ day: 'of today', awake: 'of waking hours', wee
 })();
 
 BearWall.register({
+  look: ['ring', 'text', 'dim', 'thick', 'track', 'glow'],
   type: 'date',
   name: 'Date & progress', family: 'clock', styleName: 'Date',
   size: { square: [264, 264], rect: [488, 104] },

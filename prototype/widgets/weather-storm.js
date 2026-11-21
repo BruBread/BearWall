@@ -98,6 +98,7 @@ function draw(el, ctx) {
 }
 
 BearWall.register({
+  look: ['ring', 'text', 'dim', 'icons'], lookLabels: { ring: 'Accent color' },
   type: 'storm',
   name: 'Storm track', family: 'weather', styleName: 'Storm',
   size: { square: [264, 264], rect: [488, 104] },

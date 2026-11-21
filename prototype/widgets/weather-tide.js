@@ -90,6 +90,7 @@ function draw(el, ctx) {
 }
 
 BearWall.register({
+  look: ['ring', 'text', 'dim'], lookLabels: { ring: 'Line color' },
   type: 'tide',
   name: 'Tide & sea', family: 'weather', styleName: 'Tide & sea',
   size: { square: [264, 264], rect: [488, 104] },

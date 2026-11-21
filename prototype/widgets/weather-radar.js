@@ -81,6 +81,7 @@ function draw(el, ctx) {
 }
 
 BearWall.register({
+  look: ['ring', 'text', 'dim'], lookLabels: { ring: 'Accent color' },
   type: 'radar',
   name: 'Rain radar', family: 'weather', styleName: 'Radar',
   size: { square: [264, 264], rect: [488, 104] },
