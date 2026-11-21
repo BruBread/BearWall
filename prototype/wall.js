@@ -1483,6 +1483,9 @@ window.BearWall = {
       bgDue.forEach(i => updateBg(i, now, weather));
     }, 1000);
   },
+  // the projector app calls these when the remote's POWER button sleeps / wakes the projector
+  sleep() { if (!stage) return; window.BearWallIntro && BearWallIntro.cancel(); stage.style.visibility = 'hidden'; },
+  wake() { if (!stage) return; stage.style.visibility = ''; buildStage(); playIntro(); fetchWeather(); },
   _test: { homography, applyH, validQuad, inQuad, localToPanel, panelToLocal, get inside() { return inside; }, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };
 })();

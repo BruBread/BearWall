@@ -25,7 +25,7 @@ import java.io.File;
 /**
  * The projector's home screen: the wall, fullscreen, from the app's own server.
  * Remote: MENU toggles Window mode, SETTINGS opens a small app menu. Back never leaves the wall, and the POWER key
- * is left alone (a root daemon on the projector handles it). While the light is off (Lcd_en = 0) the page pauses.
+ * is left alone (a root daemon on the projector handles it). In sleep mode (Lcd_en = 0) the wall hides and pauses; waking replays the intro.
  */
 public class WallActivity extends Activity {
     static final String URL = "http://127.0.0.1:" + Server.PORT + "/wall";
@@ -61,17 +61,22 @@ public class WallActivity extends Activity {
         setContentView(wv);
         hideBars();
         wv.loadUrl(URL);
-        ui.postDelayed(lightCheck, 3000);
+        ui.postDelayed(lightCheck, 500);
     }
 
     final Runnable reload = new Runnable() { public void run() { wv.loadUrl(URL); } };
 
-    // pause the page while the projector's light is off (sleep mode); never touch Lcd_power
+    // sleep mode (Lcd_en = 0): hide the wall, then pause the page; on wake, resume and replay the intro. Never touch Lcd_power.
     final Runnable lightCheck = new Runnable() { public void run() {
         boolean off = "0".equals(Files.read(LCD, "255").trim());
-        if (off != dark) { dark = off; applyPause(); }
-        ui.postDelayed(this, 3000);
+        if (off != dark) {
+            dark = off;
+            if (dark) { wv.evaluateJavascript("window.BearWall && BearWall.sleep()", null); ui.postDelayed(pauseLater, 300); }   // let the hidden frame draw first
+            else { applyPause(); wv.evaluateJavascript("window.BearWall && BearWall.wake()", null); }
+        }
+        ui.postDelayed(this, 500);
     }};
+    final Runnable pauseLater = new Runnable() { public void run() { applyPause(); } };
 
     void applyPause() {
         if (dark || !resumed) { wv.onPause(); wv.pauseTimers(); }
