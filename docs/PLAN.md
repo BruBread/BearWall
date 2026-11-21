@@ -90,6 +90,20 @@ Widgets are grouped into families. Each family is one widget in the gallery, wit
 - Stopwatch
 - Scheduled reminders that appear only when they're due
 
+**Alerts** (planned family, ideas stage): invisible until something matters, then it catches your attention.
+- **Alert levels:** info is a quiet pulse, warning flashes once, critical flashes and, later, the bulb flashes too.
+- **Candidate styles:**
+  - Earthquake (USGS)
+  - Internet down or slow
+  - Rain soon and thunderstorms
+  - Dangerous heat index
+  - Bad air quality
+  - Extreme UV
+  - Typhoon
+  - Volcano alert level
+  - Projector overheating or low on storage
+  - Bedtime nudge
+
 The list below is the original idea list. Some items are now styles of a family.
 
 **Standalone** (they only need the projector):
