@@ -196,16 +196,10 @@ function validQuad(q) {
 const types = {};
 const known = w => !!types[w.type];
 const bgTypes = {};                          // section backgrounds (Window, ...)
-const BASE = 'wall';                         // the base section: the whole projected picture
 // Widgets sit on one wall in wall px (1280x720). A widget may have a `quad`: its 4 corners on the wall,
 // ordered [top-left, top-right, bottom-left, bottom-right]; its flat w x h content is warped onto them.
-const DEFAULT_LAYOUT = { windowOn: false, sections: [{ id: BASE, name: 'Wall', x: 0, y: 0, w: 1280, h: 720, bg: 'none', bgOpts: {} }], widgets: [
-  { id: 'w1', type: 'weather', mode: 'square', anchor: 'right', x: 64, y: 120, w: 264, h: 264, opts: {} },
-  { id: 'w3', type: 'clock', mode: 'square', anchor: 'right', x: 360, y: 120, w: 264, h: 264, opts: {} },
-  { id: 'w4', type: 'hourly', mode: 'rect', anchor: 'left', x: 64, y: 424, w: 560, h: 112, opts: {} },
-  { id: 'w2', type: 'date', mode: 'rect', anchor: 'right', x: 744, y: 32, w: 488, h: 104, opts: {} },
-  { id: 'w5', type: 'sky', mode: 'rect', anchor: 'right', x: 744, y: 152, w: 488, h: 104, opts: {} }
-] };
+// a fresh wall is empty: you draw sections, then put widgets in them
+const DEFAULT_LAYOUT = { windowOn: false, sections: [], widgets: [] };
 const FULL = rectPts(0, 0, WALL_W, WALL_H);
 const CORNERS = ['Top left', 'Top right', 'Bottom left', 'Bottom right'];
 const EDGES = [[0, 1], [1, 3], [3, 2], [2, 0]];                    // top, right, bottom, left
@@ -252,15 +246,22 @@ function migrate(old) {
 }
 // the look the whole wall used to share; it becomes each widget's starting look
 const oldLook = Object.fromEntries(LOOK_KEYS.filter(k => savedSettings && savedSettings[k] != null).map(k => [k, savedSettings[k]]));
+// square or one-row rectangle, from the box's proportions (sticky between 2.0x and 2.4x so it doesn't flicker while resizing)
+function autoMode(w) {
+  const r = w.w / w.h;
+  return r >= 2.4 ? 'rect' : r < 2.0 ? 'square' : (w.mode === 'rect' ? 'rect' : 'square');
+}
 function normalize() {
   L = migrate(L);
   if (!L || !Array.isArray(L.widgets)) L = copy(DEFAULT_LAYOUT);
   delete L.warp;   // the old whole-wall warp; widgets warp one by one now
-  // sections: the base "Wall" always exists and always covers the whole picture
+  // sections: every widget lives in one. Older saves had a built-in "Wall" section or no sections at all;
+  // those widgets end up in an ordinary section called "Main" that covers the whole picture.
   L.sections = Array.isArray(L.sections) ? L.sections.filter(x => x && x.id) : [];
-  if (!L.sections.some(x => x.id === BASE)) L.sections.unshift(copy(DEFAULT_LAYOUT.sections[0]));
+  const oldBase = L.sections.find(x => x.id === 'wall' && x.name === 'Wall');
+  if (oldBase) oldBase.name = 'Main';
+  const main = () => sectionOf('main') || sectionOf('wall') || (L.sections.push({ id: 'main', name: 'Main', x: 0, y: 0, w: WALL_W, h: WALL_H, bg: 'none', bgOpts: {} }), sectionOf('main'));
   for (const x of L.sections) {
-    if (x.id === BASE) Object.assign(x, { x: 0, y: 0, w: WALL_W, h: WALL_H }), delete x.quad;
     for (const k of ['x', 'y', 'w', 'h']) if (!Number.isFinite(x[k])) x[k] = k === 'w' ? 480 : k === 'h' ? 320 : 0;
     fitInside(x, WALL_W, WALL_H);
     if (x.quad && !(validQuad(x.quad) && inPanel(x.quad))) delete x.quad;
@@ -270,12 +271,12 @@ function normalize() {
   }
   L.windowOn = !!L.windowOn;
   for (const w of L.widgets) {
-    if (!sectionOf(w.section)) w.section = BASE;
+    if (!sectionOf(w.section)) w.section = main().id;
     const sp = sectionOf(w.section);
     for (const k of ['x', 'y', 'w', 'h']) if (!Number.isFinite(w[k])) w[k] = k === 'w' || k === 'h' ? 240 : 0;
     fitInside(w, sp.w, sp.h);
     if (w.quad && !(validQuad(w.quad) && w.quad.every(([x, y]) => x >= 0 && x <= sp.w && y >= 0 && y <= sp.h))) delete w.quad;
-    w.mode = w.mode === 'rect' ? 'rect' : 'square';
+    w.mode = autoMode(w);
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
     w.when = ['laptop', 'phone'].includes(w.when) ? w.when : 'always';
     if (known(w)) w.opts = Object.assign(defaultOpts(types[w.type]), w.opts);   // unknown types are kept but not shown
@@ -447,9 +448,9 @@ function drawWarpUI() {
 function buildStage() {
   inst.forEach(i => i.ro.disconnect()); bgInst.forEach(b => b.ro.disconnect());
   if (inside && !sectionOf(inside)) inside = null;
-  wallEl.innerHTML = L.sections.map(s => `<div class="section${s.id === BASE ? ' base' : ''}" data-sid="${esc(s.id)}"><div class="sbg"></div>`
+  wallEl.innerHTML = L.sections.map(s => `<div class="section" data-sid="${esc(s.id)}"><div class="sbg"></div>`
     + L.widgets.filter(w => w.section === s.id && known(w)).map(w => `<div class="widget frame" data-wid="${esc(w.id)}"><div class="wgt"></div>${HANDLES}</div>`).join('')
-    + (s.id === BASE ? '' : HANDLES) + '</div>').join('');
+    + HANDLES + '</div>').join('');
   const observe = (el, i) => {
     i.ro = new ResizeObserver(() => {   // layout size, not the warped on-screen size
       el.style.setProperty('--u', Math.min(el.offsetWidth, el.offsetHeight) / 100 + 'px');
@@ -610,7 +611,7 @@ function renderSel() {
   $('#widgetTools').hidden = !sel;
   renderLook(sel ? w : null);
   if (sel) {
-    onTabs('mode', w.mode); onTabs('wAnchor', w.anchor); onTabs('wWhen', w.when);
+    onTabs('wAnchor', w.anchor); onTabs('wWhen', w.when);
     $('#anchorRow').hidden = w.mode !== 'rect';
     renderStyles(w);
     renderOpts(w);
@@ -732,15 +733,16 @@ function leaveSection() { const id = inside; inside = null; positionAll(); selSe
 
 function deleteSelected() {
   const s = selS();
-  if (s && s.id !== BASE) return deleteSection(s);
+  if (s) return $('#secDel').click();   // same two-step as the button when it has widgets
   if (!sel) return;
   L.widgets = L.widgets.filter(w => w.id !== sel);
   sel = null; saveLayout(); buildStage();
 }
 // the section new widgets go into: the one you're inside, the selected one, the selected widget's, or the whole wall
-const homeSection = () => sectionOf(inside) || selS() || (selW() && sectionOf(selW().section)) || sectionOf(BASE);
+const homeSection = () => sectionOf(inside) || selS() || (selW() && sectionOf(selW().section)) || L.sections[L.sections.length - 1] || null;
 function addWidget(type) {
   const m = types[type], [w0, h0] = m.size.square, s = homeSection();
+  if (!s) return;   // draw a section first (the gallery says so)
   const w = { id: uid(), type, section: s.id, mode: 'square', anchor: 'right', when: m.when || 'always', x: snap((s.w - w0) / 2), y: snap((s.h - h0) / 2), w: w0, h: h0, opts: defaultOpts(m), look: copy(DEFAULT_LOOK) };
   fitInside(w, s.w, s.h);
   w.x = Math.max(0, w.x); w.y = Math.max(0, w.y);
@@ -754,19 +756,15 @@ function moveThing(t, start, dx, dy) {
 }
 
 /* ---------- sections ---------- */
-function addSection() {
-  const s = { id: uid(), name: 'Section ' + L.sections.length, x: 400, y: 200, w: 480, h: 320, bg: 'none', bgOpts: {} };
+function addSection(box = { x: 400, y: 200, w: 480, h: 320 }) {
+  const s = Object.assign({ id: uid(), name: 'Section ' + (L.sections.length + 1), bg: 'none', bgOpts: {} }, box);
   L.sections.push(s); selSec = s.id; sel = null; saveLayout(); buildStage();
 }
-function deleteSection(s) {   // its widgets move onto the wall, where the section was
-  for (const w of L.widgets.filter(w => w.section === s.id)) {
-    const [x, y] = localToPanel(s, [w.x, w.y]);
-    Object.assign(w, { section: BASE, x: snap(x), y: snap(y) }); delete w.quad;
-    fitInside(w, WALL_W, WALL_H);
-  }
+function deleteSection(s) {   // its widgets go with it (the button asks twice when there are any)
+  L.widgets = L.widgets.filter(w => w.section !== s.id);
   L.sections = L.sections.filter(x => x !== s);
   if (inside === s.id) inside = null;
-  selSec = null; saveLayout(); buildStage();
+  sel = null; selSec = null; saveLayout(); buildStage();
 }
 function moveToSection(w, s) {   // keep the spot on the wall when it can, otherwise drop it in the middle
   const from = sectionOf(w.section), at = panelToLocal(s, localToPanel(from, [w.x, w.y]));
@@ -779,6 +777,11 @@ function moveToSection(w, s) {   // keep the spot on the wall when it can, other
 function renderSections() {
   const s = selS(), list = $('#secList');
   list.innerHTML = L.sections.map(x => `<button data-sid="${esc(x.id)}" class="${x === s ? 'on' : ''}">${esc(x.name)}${x.bg !== 'none' ? ' · ' + esc((bgTypes[x.bg] || {}).name || x.bg) : ''}</button>`).join('');
+  list.hidden = !L.sections.length;
+  $('#secEmpty').hidden = !!L.sections.length;
+  $('#gallery').classList.toggle('off', !L.sections.length);
+  $('#galleryHint').hidden = !!L.sections.length;
+  $('#winBtn').disabled = !L.sections.length;
   $('#secTools').hidden = !s;
   $('#winBtn').classList.toggle('on', !!L.windowOn);
   $('#winBtn').textContent = L.windowOn ? 'Window on' : 'Window';
@@ -787,9 +790,9 @@ function renderSections() {
   if (inside) $('#insideName').textContent = `Inside “${sectionOf(inside).name}”`;
   if (!s) return;
   if (document.activeElement !== $('#secName')) $('#secName').value = s.name;
-  $('#secName').disabled = s.id === BASE;
-  $('#secDel').hidden = s.id === BASE;
-  $('#secInside').hidden = s.id === BASE || inside === s.id;
+  $('#secInside').hidden = inside === s.id;
+  const n = L.widgets.filter(w => w.section === s.id).length, del = $('#secDel');
+  if (!del.dataset.armed) del.textContent = n ? `Delete section + ${n} widget${n > 1 ? 's' : ''}` : 'Delete section';
   onTabs('secBg', s.bg);
   const m = bgTypes[s.bg], box = $('#secBgOpts');
   const key = s.id + ':' + s.bg;
@@ -820,8 +823,8 @@ function setSecOpt(k, v) {
 // Window mode: the header button. With no window section yet, the selected section (or the whole wall) becomes one.
 function toggleWindow() {
   if (!L.windowOn && !L.sections.some(s => bgTypes[s.bg])) {
-    const s = selS() || sectionOf(inside) || sectionOf(BASE), first = Object.keys(bgTypes)[0];
-    if (!first) return;
+    const s = selS() || sectionOf(inside) || L.sections[0], first = Object.keys(bgTypes)[0];
+    if (!first || !s) return;
     s.bg = first; s.bgOpts = Object.assign(defaultOpts(bgTypes[first]), s.bgOpts);
   }
   L.windowOn = !L.windowOn; saveLayout(); render();
@@ -881,6 +884,15 @@ function renderPhotoThumbs(box, key, ids) {
 }
 
 let drag = null, pinch = null;
+// the dashed box you see while drawing a new section (snapped to the grid, kept on the wall)
+function drawBox(d, p) {
+  const x0 = clamp(snap(Math.min(d.p0[0], p[0])), 0, WALL_W), y0 = clamp(snap(Math.min(d.p0[1], p[1])), 0, WALL_H);
+  const x1 = clamp(snap(Math.max(d.p0[0], p[0])), 0, WALL_W), y1 = clamp(snap(Math.max(d.p0[1], p[1])), 0, WALL_H);
+  d.box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  const el = $('#drawBox');
+  el.hidden = d.box.w < 8 && d.box.h < 8;
+  place(el, d.box, WALL_W, WALL_H);
+}
 const pointers = new Map();
 function bindStage() {
   stageBox.addEventListener('pointerdown', e => {
@@ -907,11 +919,15 @@ function bindStage() {
     // look through everything under the pointer: a widget beats the section it sits in or any section covering it
     const stack = document.elementsFromPoint(e.clientX, e.clientY), hh = e.target.closest('.handle'), up = (cls) => stack.map(el => el.closest && el.closest(cls)).find(Boolean);
     const f = hh && hh.parentElement.classList.contains('widget') ? hh.parentElement : up('.widget');
-    const sf = hh && hh.parentElement.classList.contains('section') ? hh.parentElement : up('.section:not(.base)') || e.target.closest('.section');
+    const sf = hh && hh.parentElement.classList.contains('section') ? hh.parentElement : up('.section');
     let thing;
     if (f && (!inside || sectionOf(inside).id === widgetOf(f.dataset.wid).section)) { select(f.dataset.wid); thing = selW(); }
-    else if (sf && sf.dataset.sid !== BASE && (!inside || inside === sf.dataset.sid)) { if (inside) { select(null); return; } selectSection(sf.dataset.sid); thing = selS(); }
-    else { select(null); selectSection(null); return; }   // empty wall: View
+    else if (sf && (!inside || inside === sf.dataset.sid)) { if (inside) { select(null); return; } selectSection(sf.dataset.sid); thing = selS(); }
+    else {   // empty wall: View. Dragging here draws a new section.
+      sel = null; selSec = null; renderChrome();
+      if (!inside) { drag = { kind: 'draw', p0: p }; stageBox.setPointerCapture(e.pointerId); e.preventDefault(); }
+      return;
+    }
     const h = e.target.closest('.handle');
     const owner = h && (h.parentElement.dataset.wid || h.parentElement.dataset.sid);
     if (thing.quad) pushUndo(null, thing);
@@ -928,9 +944,20 @@ function bindStage() {
       return;
     }
     if (!drag) return;
+    if (drag.kind === 'draw') return drawBox(drag, p);
     const l = toSpace(drag.t, p), dx = l[0] - drag.l0[0], dy = l[1] - drag.l0[1];
     if (drag.kind === 'move') return moveThing(drag.t, drag.start, dx, dy);
-    if (drag.kind === 'resize') { const sp = spaceOf(drag.t); moveResize(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h); return reposition(drag.t); }
+    if (drag.kind === 'resize') {
+      const sp = spaceOf(drag.t);
+      moveResize(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h); reposition(drag.t);
+      if (!isSec(drag.t) && autoMode(drag.t) !== drag.t.mode) {   // shape follows the proportions
+        drag.t.mode = autoMode(drag.t);
+        const i = inst.find(x => x.w === drag.t);
+        if (i) updateInst(i);
+        renderSel();
+      }
+      return;
+    }
     if (drag.kind === 'all') return moveAll(drag.t, drag.q0, dx, dy);
     const q = copy(drag.q0);
     const idx = drag.kind === 'corner' ? [corner] : EDGES[drag.edge];
@@ -939,6 +966,11 @@ function bindStage() {
   });
   const end = e => {
     pointers.delete(e.pointerId);
+    if (drag && drag.kind === 'draw') {   // a real drag makes a section; a plain click just leaves you in View
+      const b = drag.box; drag = null; $('#drawBox').hidden = true;
+      if (b && b.w >= MIN && b.h >= MIN) addSection(b);
+      return;
+    }
     if (drag || pinch) saveLayout();
     if (pointers.size < 2) pinch = null;
     drag = null;
@@ -950,7 +982,7 @@ function bindStage() {
   // (pointer capture sends the dblclick to stageBox, so look at what's under the pointer instead of e.target)
   stageBox.addEventListener('dblclick', e => {
     const stack = document.elementsFromPoint(e.clientX, e.clientY), up = cls => stack.map(el => el.closest && el.closest(cls)).find(Boolean);
-    const sf = up('.section:not(.base)');
+    const sf = up('.section');
     if (inside) { if (!sf || sf.dataset.sid !== inside) leaveSection(); return; }
     const wf = up('.widget');
     if (sf && !(wf && sf.contains(wf))) enterSection(sf.dataset.sid);   // a widget of this section takes the double-click itself
@@ -1004,12 +1036,6 @@ function bindControls() {
   for (const k of ['thick', 'track', 'glow']) $('#w' + k[0].toUpperCase() + k.slice(1)).oninput = e => setLook(k, +e.target.value);
   $('#wIcons').onclick = e => { const b = e.target.closest('button'); if (b) setLook('icons', b.dataset.v); };
   $('#wStyle').onclick = e => { const b = e.target.closest('button'), list = $('#wStyle')._list; if (b && list) setStyle(list[+b.dataset.i]); };
-  $('#mode').onclick = e => {
-    const b = e.target.closest('button'), w = selW();
-    if (!b || !w || w.mode === b.dataset.v) return;
-    [w.w, w.h] = types[w.type].size[b.dataset.v]; w.mode = b.dataset.v;
-    const sp = spaceOf(w); fitInside(w, sp.w, sp.h); positionWidget(w); saveLayout(); render();
-  };
   $('#wAnchor').onclick = e => {
     const b = e.target.closest('button'), w = selW();
     if (!b || !w) return;
@@ -1026,13 +1052,21 @@ function bindControls() {
   $('#winBtn').onclick = toggleWindow;
   $('#winBtn').hidden = !Object.keys(bgTypes).length;
   $('#backWall').onclick = leaveSection;
-  $('#secAdd').onclick = addSection;
+  $('#secAdd').onclick = () => addSection();
   $('#secList').onclick = e => { const b = e.target.closest('button'); if (b) { if (inside && inside !== b.dataset.sid) leaveSection(); selectSection(b.dataset.sid); } };
-  $('#secName').oninput = e => { const s = selS(); if (!s || s.id === BASE) return; s.name = e.target.value.trim() || 'Section'; saveLayout(); positionSection(s); renderSections(); };
+  $('#secName').oninput = e => { const s = selS(); if (!s) return; s.name = e.target.value.trim() || 'Section'; saveLayout(); positionSection(s); renderSections(); };
   $('#secBg').onclick = e => { const b = e.target.closest('button'); if (b) setSecBg(b.dataset.v); };
   $('#secBgOpts').addEventListener('click', e => { const b = e.target.closest('.tabs button'); if (b) setSecOpt(b.parentElement.dataset.k, b.dataset.v); });
   $('#secBgOpts').addEventListener('input', e => { const t = e.target; if (t.dataset.k) setSecOpt(t.dataset.k, t.type === 'checkbox' ? t.checked : t.value); });
-  $('#secDel').onclick = () => { const s = selS(); if (s) deleteSection(s); };
+  $('#secDel').onclick = e => {   // two taps when the section still has widgets
+    const s = selS(), b = e.currentTarget;
+    if (!s) return;
+    const n = L.widgets.filter(w => w.section === s.id).length;
+    clearTimeout(b._t);
+    if (b.dataset.armed || !n) { delete b.dataset.armed; deleteSection(s); return; }
+    b.dataset.armed = '1'; b.textContent = `Tap again to delete it + ${n} widget${n > 1 ? 's' : ''}`;
+    b._t = setTimeout(() => { delete b.dataset.armed; renderSections(); }, 3000);
+  };
   $('#secInside').onclick = () => { const s = selS(); if (s) enterSection(s.id); };
   $('#wSection').onchange = e => { const w = selW(), s = sectionOf(e.target.value); if (w && s && s.id !== w.section) moveToSection(w, s); };
   $('#widgetOpts').addEventListener('change', e => { const t = e.target; if (t.dataset.photos) { addPhotos(t.dataset.photos, [...t.files]); t.value = ''; } });
@@ -1040,9 +1074,9 @@ function bindControls() {
   $('#widgetOpts').addEventListener('click', e => { const b = e.target.closest('.tabs button'); if (b) setOpt(b.parentElement.dataset.k, b.dataset.v); });
   $('#widgetOpts').addEventListener('input', e => { const t = e.target; if (t.dataset.k) setOpt(t.dataset.k, t.type === 'checkbox' ? t.checked : t.value); });
   $('#reset').onclick = e => {   // two taps instead of confirm(), which embedded pages can't show
-    const b = e.currentTarget, disarm = () => { delete b.dataset.armed; b.textContent = 'Reset widgets'; };
+    const b = e.currentTarget, disarm = () => { delete b.dataset.armed; b.textContent = 'Clear wall'; };
     clearTimeout(b._t);
-    if (b.dataset.armed) { disarm(); L.widgets = copy(DEFAULT_LAYOUT.widgets); normalize(); sel = null; selSec = null; undo = []; saveLayout(); buildStage(); return; }
+    if (b.dataset.armed) { disarm(); L = copy(DEFAULT_LAYOUT); normalize(); sel = null; selSec = null; inside = null; undo = []; saveLayout(); buildStage(); return; }
     b.dataset.armed = '1'; b.textContent = 'Tap again to reset';
     b._t = setTimeout(disarm, 3000);
   };

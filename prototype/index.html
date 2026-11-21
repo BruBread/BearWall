@@ -27,7 +27,8 @@
       <h2>Add a widget</h2>
       <div class="sub">Click one to put it in the middle of the wall.</div>
       <div class="gallery" id="gallery"></div>
-      <div class="actions"><button class="btn quiet" id="reset">Reset widgets</button></div>
+      <div class="note" id="galleryHint" hidden>Draw a section first: drag on the empty wall, or use Add section.</div>
+      <div class="actions"><button class="btn quiet" id="reset">Clear wall</button></div>
     </section>
     <section class="glass side" aria-label="Projector">
       <h2>Projector</h2>
@@ -52,7 +53,7 @@
       </div>
       <div class="wall-wrap" id="wallWrap">
         <div class="stage-box" id="stageBox">
-          <div class="stage m-full" id="stage"><div class="wall" id="wall"></div></div>
+          <div class="stage m-full" id="stage"><div class="wall" id="wall"></div><div class="drawbox" id="drawBox" hidden></div></div>
           <div class="warpui" id="warpui" hidden>
             <svg viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true"><polygon></polygon></svg>
             <i class="eh" data-e="0"></i><i class="eh" data-e="1"></i><i class="eh" data-e="2"></i><i class="eh" data-e="3"></i>
@@ -105,8 +106,6 @@
         <div id="widgetTools" hidden>
           <div class="lbl"><span>Style</span></div>
           <div class="tabs wrap" id="wStyle"></div>
-          <div class="lbl"><span>Shape</span></div>
-          <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
           <div id="anchorRow">
             <div class="lbl"><span>Hug corner</span></div>
             <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
@@ -127,8 +126,9 @@
 
       <section class="glass" aria-label="Sections">
         <h2>Sections</h2>
-        <div class="sub">Areas of the picture, each on its own surface. Click one on the wall (or here) to move it, hold Shift to warp it onto the real surface, double-click it to go inside and place its widgets.</div>
+        <div class="sub">Areas of the picture, each on its own surface. Drag on the empty wall to draw one. Click it to move or resize it, hold Shift to warp it onto the real surface, double-click it to go inside and place its widgets.</div>
         <div class="tabs wrap" id="secList"></div>
+        <div class="note" id="secEmpty">No sections yet. Drag on the empty wall to draw one.</div>
         <div class="actions"><button class="btn quiet" id="secAdd">Add section</button></div>
         <div id="secTools" hidden>
           <div class="lbl"><span>Name</span></div>

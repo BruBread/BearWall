@@ -70,13 +70,16 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 .wall { position: absolute; inset: 0; }
 .widget { position: absolute; }
 /* sections: areas of the picture; the base one is the whole wall */
-.section { position: absolute; }
-.section.base { inset: 0; }
+.section { position: absolute; z-index: 0; }   /* its own stacking layer: a raised widget stays inside its section */
 .section.warped { transform-origin: 0 0; }
+.stage:not(.inside) .wall { cursor: crosshair; }
+.section, .widget { cursor: pointer; }
+.drawbox { position: absolute; z-index: 6; border: 2px dashed var(--c); border-radius: 6px; background: #ff7ac614; pointer-events: none; }
+.gallery.off { opacity: .35; pointer-events: none; }
 .sbg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .section.win-on > .widget { display: none; }
-.stage.sel-on .section:not(.base) { outline: 2px dashed var(--c); outline-offset: -1px; cursor: pointer; }
-.stage.sel-on .section:not(.base)::before { content: attr(data-label); position: absolute; z-index: 3; left: 4px; top: 4px; font: 800 clamp(10px, 1.1vw, 13px) var(--ui); white-space: nowrap; padding: 3px 9px; border-radius: 7px; background: #000d; color: var(--c); border: 1px solid var(--c); }
+.stage.sel-on .section { outline: 2px dashed var(--c); outline-offset: -1px; cursor: pointer; }
+.stage.sel-on .section::before { content: attr(data-label); position: absolute; z-index: 3; left: 4px; top: 4px; font: 800 clamp(10px, 1.1vw, 13px) var(--ui); white-space: nowrap; padding: 3px 9px; border-radius: 7px; background: #000d; color: var(--c); border: 1px solid var(--c); }
 .stage .section.sel { outline-style: solid; cursor: move; }
 .section.sel > .handle { display: block; }
 .section.sel.warped > .handle, .section.warping > .handle, .stage.inside .section > .handle { display: none; }
