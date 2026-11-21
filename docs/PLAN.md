@@ -44,11 +44,12 @@ Coordinates are wall pixels. `quad` is optional. It holds the widget's 4 corners
 
 The projector doesn't hit the wall square-on, so **each section gets its own 4-corner warp**, and the widgets inside a section bend with it. Widgets have no warp of their own.
 - **Modes:** View (nothing selected, the clean wall), Arrange (click a widget or section to move or resize it), Warp (hold Shift with a section selected).
-- **Moves while warping:** the same as ProjectorRoot's keystone page: drag a corner, drag an edge's square to stretch that side, drag inside to move the section, scroll or pinch to zoom.
+- **Moves while warping:** the same as Hy300-Root's keystone page: drag a corner, drag an edge's square to stretch that side, drag inside to move the section, scroll or pinch to zoom.
 - **Fine control:** Shift + arrows nudge one corner by 1 px, 1–4 pick it, Ctrl+Z undoes, Ctrl+R flattens.
 - **How it's drawn:** the section lays out flat at its own size, and a CSS `matrix3d` homography maps it onto its corners. The GPU does this natively, and Chrome 95 supports it.
 - **Limits:** corners stay on the panel, and folded or mirrored shapes are refused.
 - **No root needed:** the wall page applies the warps itself, so the hardware keystone can stay neutral. Measure the animation cost of that in Phase 1.
+- **"Neutral" is not `0,0` on this projector.** The panel is kept upside down on purpose and the hardware keystone holds a 180° rotation (see [panel_flip.md](https://github.com/BruBread/Hy300-Root/blob/main/scripts/panel_flip.md)). Neutral is `lt=1280,-720 rt=-1280,-720 lb=1280,720 rb=-1280,720`. Writing `0,0` turns the whole wall upside down. Anything that writes `persist.sys.keystone.*` has to apply the 180° rule from that doc.
 - **Shift on a widget** is free for widget-specific editing: on a Photos widget, Shift + resize changes the box's shape and crops the photo (normally the box keeps the photo's proportions).
 
 ## Look
@@ -153,8 +154,15 @@ The list below is the original idea list. Some items are now styles of a family.
 - **The projector's WebView is Chrome 95.** Container queries, `:has()` and `color-mix()` aren't available. Widgets scale from a `--u` CSS variable set from their box size.
 - **About 1 GB of free RAM**, 4 × Cortex-A35, Mali-G31 GPU.
 - **The panel is 1024 × 600** and the UI is 1280 × 720. Keep strokes at 2 px or more and text at about 18 px or more.
-- **The wall pauses while the projector's light is off** (sleep mode in ProjectorRoot).
+- **The wall pauses while the projector's light is off** (sleep mode in Hy300-Root).
 - **Building the APK needs Google's Android command-line tools** (verify the checksum first).
+
+## Projector side (handled in Hy300-Root)
+
+- **Sleep** turns `Lcd_en` off, then `Lcd_power` (only `Lcd_power` turns the LED off). `Lcd_en = 0` is still the signal the wall watches to hide and pause.
+- **The power button** belongs to Hy300-Root's [`bearwall_power.sh`](https://github.com/BruBread/Hy300-Root/blob/main/scripts/bearwall_power.sh): short press sleeps or wakes, holding 3 s or more shuts down on release. The wall must not handle POWER.
+- **Never put Android to sleep** (`KEYCODE_SLEEP`, `goToSleep`). Deep suspend crashes the RK628 HDMI-in driver and hard-resets the projector. A wake lock set at boot keeps it from happening.
+- **The remote's window-mode button** is `KEY_MENU` (Linux code 139), which reaches the app as `KEYCODE_MENU`.
 
 ## Private values
 

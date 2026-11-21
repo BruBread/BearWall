@@ -2,7 +2,7 @@
 
 BearWall turns a cheap HY300 projector into a wall display for my room. It projects widgets like the weather, a clock and PC stats straight onto the wall. Black means no light, so the widgets look like they float on the wall instead of sitting in a glowing rectangle.
 
-The projector side (rooting it, keystone warping, sleep mode) lives in [ProjectorRoot](https://github.com/BruBread/ProjectorRoot). This repo is the display system that runs on top of it.
+The projector side (rooting it, keystone warping, sleep mode) lives in [Hy300-Root](https://github.com/BruBread/Hy300-Root). This repo is the display system that runs on top of it.
 
 ## Status
 
@@ -14,7 +14,7 @@ Double-click [`BearWall.bat`](BearWall.bat), or open [`prototype/index.html`](pr
 
 - **The wall:** the black 16:9 box shows exactly what the projector would show. **Fullscreen** shows it the way it looks on the wall.
 - **Click a widget** to move it or drag its corners to resize it. Everything snaps to an 8 px grid on a 1280 × 720 wall. **Click empty wall** to see it clean, exactly as the projector shows it.
-- **Hold Shift** on a selected section to warp it onto the wall's angle, with the same moves as the keystone page in [ProjectorRoot](https://github.com/BruBread/ProjectorRoot): drag a corner, drag an edge's square to stretch that side, drag inside to move it, or scroll to zoom. Shift + arrows nudge a corner 1 px (1–4 pick it), Ctrl+Z undoes, and Ctrl+R flattens it. Widgets don't warp on their own; they bend with their section.
+- **Hold Shift** on a selected section to warp it onto the wall's angle, with the same moves as the keystone page in [Hy300-Root](https://github.com/BruBread/Hy300-Root): drag a corner, drag an edge's square to stretch that side, drag inside to move it, or scroll to zoom. Shift + arrows nudge a corner 1 px (1–4 pick it), Ctrl+Z undoes, and Ctrl+R flattens it. Widgets don't warp on their own; they bend with their section.
 - **Sections:** areas of the picture, one for each surface the projector reaches. The wall starts empty: drag on it to draw a section (or press **Add section**), and every widget lives in a section. Hold Shift on a section to warp it onto its surface, and its widgets bend with it. Double-click a section to go inside it and place its widgets flat; Esc or **Back to wall** returns.
 - **Window mode:** the **Window** button above the wall turns your window section into a live window onto the sky outside. The sky follows the real sun, it rains, storms, clouds over or fogs with the live weather, and you pick the frame (cross, sliding, arched, round or none). That section's widgets hide while other sections keep theirs.
 - **Widgets:** each family has a Style row. **Weather** has Now, Hourly, Radar (RainViewer), Storm (shows only when a cyclone is inside PAR) and Tide & sea. **Clock** has Digital, Flip, Analog, Words, Date (with day, week, month or year progress) and Sun & moon. Every widget switches by itself between a square layout and a one-row rectangle for corners, depending on how wide you stretch it, and has its own settings.
