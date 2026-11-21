@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.security.MessageDigest;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -19,10 +20,9 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
@@ -38,7 +38,13 @@ import java.util.zip.ZipInputStream;
  *   GET  /api/proxy?url=       fetches news / storm feeds for the page (only the hosts listed in PROXY_HOSTS)
  *   PUT/GET/DELETE /api/photos/{id}   uploaded photos
  *   POST /api/update           downloads the newest web files from GitHub and swaps them in
+ *   POST /api/live             passes the control page's live state (selected section) to the wall; not saved
+ *   POST /api/hello, /api/bye  the BearWall Control panel on your laptop unlocks / locks control (see below)
  *   GET  /anything-else        static web files (from the app's copy of prototype/)
+ *
+ * Lock: the wall itself (127.0.0.1) can always reach everything. Anything else on the network is refused unless the
+ * BearWall Control panel is open: it sends /api/hello with the paired key every 5 s, which unlocks that one laptop
+ * for 15 s. Close the panel and control locks again within 15 s (open control pages are cut off).
  */
 class Server {
     static final int PORT = 8080;
@@ -49,7 +55,9 @@ class Server {
 
     final Context c;
     final File web, kv, photos;
-    final List<OutputStream> listeners = new CopyOnWriteArrayList<>();
+    final Map<OutputStream, String> listeners = new ConcurrentHashMap<>();   // event stream -> client address
+    volatile String okIp = null;     // the paired laptop that's allowed in right now
+    volatile long okUntil = 0;
     final ExecutorService pool = Executors.newCachedThreadPool();
 
     Server(Context c) {
@@ -70,10 +78,11 @@ class Server {
                 while (true) pool.execute(new Conn(ss.accept()));
             } catch (IOException e) { Log.e(TAG, "server stopped", e); }
         }}, "server").start();
-        new Thread(new Runnable() { public void run() {   // keeps event streams open through idle proxies
-            while (true) {
-                try { Thread.sleep(25000); } catch (InterruptedException e) { return; }
-                send(": ping\n\n");
+        new Thread(new Runnable() { public void run() {   // keeps event streams open; cuts off a laptop whose panel closed
+            for (int n = 0; ; n++) {
+                try { Thread.sleep(5000); } catch (InterruptedException e) { return; }
+                if (okIp != null && System.currentTimeMillis() > okUntil) lock();
+                if (n % 5 == 0) send(": ping\n\n");
             }
         }}, "sse-ping").start();
     }
@@ -151,15 +160,53 @@ class Server {
         }
     }
 
+    static final String LOCKED = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+        + "<body style='background:#150c2c;color:#f6f1ff;font:18px system-ui;display:grid;place-items:center;height:100vh;margin:0'>"
+        + "<div style='max-width:30em;text-align:center'><h2>BearWall is locked</h2><p>Open <b>BearWall Control</b> (BearWall.bat) on your laptop. "
+        + "Control stays open only while that window is.</p></div>";
+
+    boolean keyOk(String k) {
+        String want = Files.read(new File(c.getFilesDir(), "pair.key"), "").trim();
+        return k != null && !want.isEmpty() && MessageDigest.isEqual(want.getBytes(StandardCharsets.UTF_8), k.trim().getBytes(StandardCharsets.UTF_8));
+    }
+
+    synchronized void lock() {
+        okIp = null; okUntil = 0;
+        for (Map.Entry<OutputStream, String> e : listeners.entrySet())   // cut off the laptop's open pages
+            if (!e.getValue().equals("127.0.0.1")) { listeners.remove(e.getKey()); try { e.getKey().close(); } catch (IOException ignored) { } }
+        send("data: live:server:{}\n\n");   // the wall drops any selection outline
+    }
+
     /** @return true when the connection stays open (event stream) */
     boolean route(String m, String path, String query, Map<String, String> h, byte[] body, Socket s, OutputStream out) throws Exception {
+        String ip = s.getInetAddress().isLoopbackAddress() ? "127.0.0.1" : s.getInetAddress().getHostAddress();
+        long now = System.currentTimeMillis();
+        if (path.equals("/api/hello") && m.equals("POST")) {
+            if (!keyOk(h.get("x-key"))) { reply(out, 403, "application/json", "{\"ok\":false}"); return false; }
+            okIp = ip; okUntil = now + 15000;
+            reply(out, 200, "application/json", "{\"ok\":true}");
+            return false;
+        }
+        if (path.equals("/api/bye") && m.equals("POST")) {
+            if (ip.equals(okIp)) lock();
+            reply(out, 200, "application/json", "{\"ok\":true}");
+            return false;
+        }
+        if (!ip.equals("127.0.0.1") && !(ip.equals(okIp) && now < okUntil)) { reply(out, 403, "text/html", LOCKED); return false; }
         if (path.equals("/")) { redirect(out, "/control"); return false; }
+        if (path.equals("/api/live") && m.equals("POST")) {
+            String state = new String(body, StandardCharsets.UTF_8).replaceAll("[\\r\\n]", "");
+            if (state.length() > 1000) { reply(out, 413, "text/plain", "too large"); return false; }
+            reply(out, 200, "application/json", "{\"ok\":true}");
+            send("data: live:" + clean(h.get("x-client")) + ":" + state + "\n\n");
+            return false;
+        }
         if (path.equals("/wall") || path.equals("/control")) { file(out, new File(web, "index.html")); return false; }
         if (path.equals("/api/events")) {
             s.setSoTimeout(0);
             out.write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n: hi\n\n".getBytes(StandardCharsets.UTF_8));
             out.flush();
-            listeners.add(out);
+            listeners.put(out, ip);
             return true;
         }
         if (path.startsWith("/api/kv/")) {
@@ -200,7 +247,7 @@ class Server {
 
     void send(String msg) {
         byte[] b = msg.getBytes(StandardCharsets.UTF_8);
-        for (OutputStream o : listeners) {
+        for (OutputStream o : listeners.keySet()) {
             try { o.write(b); o.flush(); } catch (IOException e) { listeners.remove(o); try { o.close(); } catch (IOException ignored) { } }
         }
     }
