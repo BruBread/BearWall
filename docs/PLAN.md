@@ -79,6 +79,19 @@ The projector doesn't hit the wall square-on, so **each widget gets its own 4-co
 
 ## Widget catalogue
 
+Widgets are grouped into families. Each family is one widget in the gallery, with styles you switch between, like Clock (Digital, Flip, Analog, Words, Date, Sun & moon) and Weather (Now, Hourly).
+
+**Reminders** (planned family, ideas stage): notes and timers in one widget, with these styles:
+- Note
+- Checklist
+- Focus (Pomodoro)
+- Countdown
+- Timer
+- Stopwatch
+- Scheduled reminders that appear only when they're due
+
+The list below is the original idea list. Some items are now styles of a family.
+
 **Standalone** (they only need the projector):
 - clock (digital, analog, or word clock)
 - date and day progress

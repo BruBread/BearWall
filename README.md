@@ -18,7 +18,7 @@ Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need
   - Drag a corner, drag an edge's square to stretch that side, or drag inside to move it. Scroll or pinch to zoom.
   - Nudge a corner 1 px with Shift + arrows, and pick it with 1–4.
   - Undo with Ctrl+Z, and flatten the widget back to a plain rectangle with Ctrl+R.
-- **Widgets:** weather, clock (digital, flip, analog, word clock), date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
+- **Widgets:** two families, each with a Style row. **Weather** has Now and Hourly. **Clock** has Digital, Flip, Analog, Words, Date (with day, week, month or year progress) and Sun & moon. Every widget has a square mode and a one-row rectangle mode for corners, plus its own settings.
 - **Adding widgets:** pick one from the gallery of live previews under Motion.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
 - **Look:** the Look card (under Warp) sets the selected widget's own ring, text and secondary text colors with a full color picker or presets, plus ring thickness, track brightness, glow and icon colors (natural, white, ring color or any custom color). **Motion** (Full, Lite, Calm, Off) applies to every widget.
