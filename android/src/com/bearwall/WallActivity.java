@@ -48,6 +48,10 @@ public class WallActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // WebView clamps text to 8px by default, which breaks small widgets; let them shrink like they do on the PC
+        s.setMinimumFontSize(1);
+        s.setMinimumLogicalFontSize(1);
+        s.setTextZoom(100);
         wv.setWebViewClient(new WebViewClient() {
             @Override
             public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {

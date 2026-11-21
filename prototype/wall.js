@@ -28,10 +28,11 @@
  * });
  *
  * el is the widget's box. The runtime sets its classes to `wgt w-<type> <square|rect> <left|right>` on every
- * update, so never put your own classes on el itself, only on children. el has a `--u` CSS variable equal to
- * 1% of min(box width, box height) in px: size everything with calc(var(--u) * n) so the widget scales with its
- * box. Text must never overflow or overlap: give a line the `fit` class (nowrap + ellipsis) and call
- * BearWall.util.fit(el) at the end of update() to shrink it down to 50% via `font-size: calc(... * var(--fit, 1))`.
+ * update, so never put your own classes on el itself, only on children. el always lays out with its shorter side
+ * 264 px long (--u = 2.64px, so 1% of it) and CSS `zoom` scales the whole thing to its real box (--z = that zoom).
+ * Size everything with calc(var(--u) * n): a small widget is the same widget, only smaller, and zoom keeps text
+ * sharp and out of reach of the WebView's minimum font size. Text must never overflow or overlap: give a line the
+ * `fit` class (nowrap + ellipsis) and call BearWall.util.fit(el) at the end of update() to shrink it down to 50% via `font-size: calc(... * var(--fit, 1))`.
  * Rect mode is one row; anchor 'right' means mirror the order (flex-direction: row-reverse) to hug a right corner.
  * Animate only under `.m-full` / `.m-lite` (see style.css); never run a requestAnimationFrame loop forever.
  * Don't reuse the page's class names inside widgets (glass, sel, on, row, note, sub, lbl, tabs, btn, field, chip, sw, section):
@@ -107,14 +108,20 @@ function queuePut(k) {   // send to the app at most ~10 times a second; each sen
 let liveSent = '';
 function sendLive() {
   if (!ON_PROJECTOR || WALL_ONLY) return;
-  const s = selS(), state = JSON.stringify(s ? { sid: s.id, warping: warpOn() } : {});
+  const s = selS(), state = JSON.stringify(Object.assign(s ? { sid: s.id, warping: warpOn() } : {}, introAt ? { intro: introAt } : {}));
   if (state === liveSent) return;
   liveSent = state;
   fetch('/api/live', { method: 'POST', headers: { 'X-Client': CLIENT }, body: state }).catch(() => {});
 }
 let remote = {};   // on the wall: what the control page has selected
+let introAt = 0, seenIntro = 0;   // Replay intro on the control page plays it on the wall too (sent with the live state)
+const playIntro = () => window.BearWallIntro && BearWallIntro.play(stage, S.motion);
 function showRemote() {
   if (!WALL_ONLY) return;
+  if (remote.intro && remote.intro !== seenIntro) {
+    seenIntro = remote.intro;
+    if (Date.now() - remote.intro < 10000) { buildStage(); playIntro(); }   // not on a stale one replayed at connect
+  }
   wallEl.querySelectorAll('.remote-sel').forEach(el => el.classList.remove('remote-sel', 'remote-warp'));
   const s = remote.sid && sectionOf(remote.sid), el = s && secEl(s);
   if (el) { el.classList.add('remote-sel'); el.classList.toggle('remote-warp', !!remote.warping); }
@@ -261,7 +268,7 @@ const LOOK_KEYS = ['ring', 'text', 'dim', 'icon', 'thick', 'track', 'glow', 'ico
 const DEFAULT_LOOK = { ring: '#5ee6ff', text: '#f4f7ff', dim: '#a6a6a6', icon: '#ffd84d', thick: 9, track: .18, glow: .5, icons: 'natural' };
 const LOOK_ROWS = ['ring', 'text', 'dim', 'thick', 'track', 'glow', 'icons'];   // every Look control, in card order
 const COLOR_PRESETS = ['#5ee6ff', '#7dffa8', '#ffd84d', '#ff7ac6', '#b18cff', '#ffa24d', '#ff5e5e', '#5b8cff', '#ffffff', '#a6a6a6'];
-const DEFAULT_SETTINGS = { city: CITIES[0], name: '', motion: 'full' };
+const DEFAULT_SETTINGS = { city: CITIES[0], name: '', motion: 'full', sharp: true };
 
 let L = store.get('layout', null);
 const savedSettings = store.get('settings', null);
@@ -412,7 +419,17 @@ const secEl = s => wallEl.querySelector(`.section[data-sid="${s.id}"]`);
 const widEl = w => wallEl.querySelector(`.widget[data-wid="${w.id}"]`);
 const windowed = s => L.windowOn && s.bg !== 'none' && !!bgTypes[s.bg];
 
+// el lays out at BASE px on its shorter side and zooms to W x H, so every widget size is the same layout, scaled
+const BASE = 264;
+function scaleWgt(el, W, H) {
+  if (!W || !H) return false;
+  const z = Math.min(W, H) / BASE;
+  Object.assign(el.style, { width: W / z + 'px', height: H / z + 'px', zoom: z });
+  el.style.setProperty('--z', z);
+  return true;
+}
 function place(el, b, pw, ph) {
+  if (S.sharp) b = { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) };   // whole wall px
   el.style.left = b.x / pw * 100 + '%'; el.style.top = b.y / ph * 100 + '%';
   el.style.width = b.w / pw * 100 + '%'; el.style.height = b.h / ph * 100 + '%';
 }
@@ -445,13 +462,17 @@ function positionSection(s) {
   el.classList.toggle('win-on', windowed(s));
   el.dataset.label = s.name + (windowed(s) ? ' · window' : '');
   const pw = stage.clientWidth, ph = stage.clientHeight;
+  el.style.zoom = '';
   if (inside === s.id) {
     const f = insideFit(s);
     el.style.transform = '';
     place(el, { x: f.ox, y: f.oy, w: s.w * f.k, h: s.h * f.k }, WALL_W, WALL_H);
   } else if (s.quad) {   // lay out flat at its own size, then one homography maps it onto its 4 corners
-    Object.assign(el.style, { left: 0, top: 0, width: s.w * pw / WALL_W + 'px', height: s.h * ph / WALL_H + 'px',
-      transform: matrix3d(homography(rectPts(0, 0, s.w * pw / WALL_W, s.h * ph / WALL_H), s.quad.map(([x, y]) => [x * pw / WALL_W, y * ph / WALL_H]))) });
+    // Sharp: zoom 2 draws the section at double detail before the warp shrinks it (zoom also scales the matrix's
+    // output, so the corners are halved to land in the same place)
+    const k = S.sharp ? 2 : 1, W = s.w * pw / WALL_W, H = s.h * ph / WALL_H;
+    Object.assign(el.style, { left: 0, top: 0, width: W + 'px', height: H + 'px', zoom: k === 1 ? '' : k,
+      transform: matrix3d(homography(rectPts(0, 0, W, H), s.quad.map(([x, y]) => [x * pw / WALL_W / k, y * ph / WALL_H / k]))) });
   } else {
     el.style.transform = '';
     place(el, s, WALL_W, WALL_H);
@@ -508,10 +529,11 @@ function buildStage() {
     i.ro.observe(el);
   };
   inst = L.widgets.filter(known).map(w => {
-    const el = wallEl.querySelector(`.widget[data-wid="${w.id}"] > .wgt`);
+    const el = wallEl.querySelector(`.widget[data-wid="${w.id}"] > .wgt`), box = el.parentNode;
     const i = { w, m: types[w.type], el, last: 0, mounted: false };
     i.redo = () => updateInst(i);
-    observe(el, i);
+    i.ro = new ResizeObserver(() => { if (scaleWgt(el, box.offsetWidth, box.offsetHeight) && i.mounted) i.redo(); });   // layout size, not the warped one
+    i.ro.observe(box);
     return i;
   });
   bgInst = L.sections.map(s => {
@@ -560,7 +582,7 @@ function render() {
 }
 // everything that depends on the selection, without re-rendering the widgets
 function renderChrome() {
-  stage.className = `stage m-${S.motion}` + (target() || inside ? ' sel-on' : '') + (inside ? ' inside' : '');
+  stage.className = `stage m-${S.motion}` + (S.sharp ? ' sharp' : '') + (target() || inside ? ' sel-on' : '') + (inside ? ' inside' : '');
   stageBox.classList.toggle('editing', !!target() || !!inside);
   wallEl.querySelectorAll('.section.sel').forEach(el => el.classList.remove('sel'));
   const s = selS();
@@ -647,7 +669,7 @@ function renderControls() {
   $('#sample').hidden = P.source !== 'sample';
   $('#tempVal').textContent = P.temp + '°C'; $('#humVal').textContent = P.hum + '%'; $('#hourVal').textContent = clockLabel(P.hour);
   document.querySelectorAll('#conds .chip').forEach(b => b.classList.toggle('on', b.dataset.v === P.cond));
-  onTabs('source', P.source); onTabs('motion', S.motion);
+  onTabs('source', P.source); onTabs('motion', S.motion); $('#sharp').checked = !!S.sharp;
   $('#motionNote').textContent = NOTES[S.motion];
   renderChrome();
 }
@@ -702,10 +724,10 @@ function setLook(k, v) {
 
 // the Add gallery: a live, still preview of every widget (styles of a widget are picked after adding it)
 function buildGallery() {
-  $('#gallery').innerHTML = Object.values(types).filter(m => !m.family).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="wgt" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"></div></div>${esc(m.name)}</button>`).join('');
+  $('#gallery').innerHTML = Object.values(types).filter(m => !m.family).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="gbox" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"><div class="wgt"></div></div></div>${esc(m.name)}</button>`).join('');
   $('#gallery').querySelectorAll('.gitem').forEach(b => {
-    const el = b.querySelector('.wgt');
-    new ResizeObserver(() => { el.style.setProperty('--u', Math.min(el.offsetWidth, el.offsetHeight) / 100 + 'px'); renderGallery(); }).observe(el);
+    const el = b.querySelector('.wgt'), box = el.parentNode;
+    new ResizeObserver(() => { if (scaleWgt(el, box.offsetWidth, box.offsetHeight)) renderGallery(); }).observe(box);
   });
 }
 function renderGallery(now = timeNow(), weather = weatherNow(now)) {
@@ -1171,6 +1193,7 @@ function bindControls() {
     const b = e.target.closest('button'); if (!b) return;
     S.motion = b.dataset.v; saveSettings(); buildStage();
   };
+  $('#sharp').onchange = e => { S.sharp = e.target.checked; saveSettings(); buildStage(); };
   $('#source').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     P.source = b.dataset.v; if (P.source === 'live' && liveState === 'offline') fetchWeather(); render();
@@ -1178,7 +1201,7 @@ function bindControls() {
   for (const id of ['temp', 'hum', 'hour']) { const r = $('#' + id); r.value = P[id]; r.oninput = () => { P[id] = +r.value; render(); }; }
   $('#name').value = S.name;
   $('#name').oninput = e => { S.name = e.target.value; saveSettings(); render(); };
-  $('#replay').onclick = buildStage;   // remounting replays every intro animation
+  $('#replay').onclick = () => { buildStage(); playIntro(); introAt = Date.now(); sendLive(); };   // remounting replays every widget's own intro too
   if (document.fullscreenEnabled) $('#full').onclick = () => $('#wallWrap').requestFullscreen().catch(() => {});
   else $('#full').hidden = true;
   bindCitySearch();
@@ -1357,6 +1380,8 @@ function selfTest() {
   ok(Math.abs(back2[0] - 123) < 1e-6 && Math.abs(back2[1] - 77) < 1e-6, 'section mapping round-trips');
   const kb = {}; resizeKeep(kb, { x: 0, y: 0, w: 400, h: 200 }, 100, 0, 'se', 1280, 720);
   ok(kb.w === 504 && kb.h === 252 && kb.x === 0, 'photo resize keeps proportions', kb);
+  const zs = document.createElement('div'); scaleWgt(zs, 132, 66);
+  ok(zs.style.zoom === '0.25' && zs.style.width === '528px' && zs.style.height === '264px', 'a widget lays out at 264 px on its short side and zooms to its box', zs.style.cssText);
   resizeKeep(kb, { x: 100, y: 100, w: 400, h: 200 }, -900, 0, 'nw', 1280, 720);
   ok(kb.x >= 0 && kb.y >= 0 && Math.abs(kb.w / kb.h - 2) < .02, 'kept proportions stay inside', kb);
   const b = { x: 0, y: 0, w: 100, h: 100 };
@@ -1444,6 +1469,7 @@ window.BearWall = {
     normalize();
     bindStage(); bindControls();
     buildStage();
+    playIntro();   // sections light up, then the widgets load in
     fetchWeather();
     setInterval(fetchWeather, 10 * 60 * 1000);
     checkNet(); setInterval(checkNet, 30 * 1000);
