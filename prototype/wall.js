@@ -19,6 +19,7 @@
  *     { key: 'tz', label: 'Zone', type: 'select', choices: [['', 'Off'], ['Asia/Tokyo', 'Tokyo']], value: '' },
  *   ],                                // tabs/select values are strings; switch values are booleans
  *   every: 1000,                      // optional: also call update() every this many ms (a clock wants 1000)
+ *   keepAspect: true,                 // optional: resizing keeps the box's proportions; Shift + resize changes them (crops)
  *   css: `.w-clock .digits { ... }`,  // injected once; scope every rule under .w-<type>
  *   mount(el, ctx) {},                // build your DOM inside el, once
  *   update(el, ctx) {},               // refresh from ctx: after mount, on any change, on resize, and every `every` ms
@@ -275,7 +276,11 @@ function normalize() {
     const sp = sectionOf(w.section);
     for (const k of ['x', 'y', 'w', 'h']) if (!Number.isFinite(w[k])) w[k] = k === 'w' || k === 'h' ? 240 : 0;
     fitInside(w, sp.w, sp.h);
-    if (w.quad && !(validQuad(w.quad) && w.quad.every(([x, y]) => x >= 0 && x <= sp.w && y >= 0 && y <= sp.h))) delete w.quad;
+    if (w.quad) {   // widgets don't warp any more (their section does): keep the spot, drop the bend
+      const xs = w.quad.map(p => +p[0]), ys = w.quad.map(p => +p[1]);
+      if (xs.concat(ys).every(Number.isFinite)) { w.x = Math.min(...xs); w.y = Math.min(...ys); }
+      delete w.quad; fitInside(w, sp.w, sp.h);
+    }
     w.mode = autoMode(w);
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
     w.when = ['laptop', 'phone'].includes(w.when) ? w.when : 'always';
@@ -347,8 +352,8 @@ let inside = null;                         // id of the section you're inside, o
 const HANDLES = ['nw', 'ne', 'sw', 'se'].map(h => `<i class="handle" data-h="${h}"></i>`).join('');
 const selW = () => (sel && widgetOf(sel)) || null;
 const selS = () => (selSec && sectionOf(selSec)) || null;
-const target = () => selW() || selS();     // what Shift-warp edits
-const warpOn = () => !!target() && shiftHeld && !(selS() && inside);
+const target = () => selW() || selS();     // what's selected: a widget or a section
+const warpOn = () => !!selS() && shiftHeld && !inside;   // only sections warp; their widgets bend with them
 const isSec = t => !!t && !t.type;         // sections have no widget type
 const spaceOf = t => isSec(t) ? { w: WALL_W, h: WALL_H } : sectionOf(t.section);   // the box a thing lives in
 const quadOf = t => t.quad || rectPts(t.x, t.y, t.w, t.h);
@@ -403,19 +408,12 @@ function positionSection(s) {
   L.widgets.filter(w => w.section === s.id && known(w)).forEach(positionWidget);
 }
 // A warped widget lays out flat at its own w x h, then a homography maps it onto its 4 corners (in its section's space).
+// Widgets lay out flat inside their section; the section's warp bends them.
 function positionWidget(w) {
-  const el = widEl(w), s = sectionOf(w.section), se = s && secEl(s);
-  if (!el || !se) return;
-  el.classList.toggle('warped', !!w.quad);
-  if (w.quad) {
-    const kx = se.offsetWidth / s.w, ky = se.offsetHeight / s.h;
-    Object.assign(el.style, { left: 0, top: 0, width: w.w * kx + 'px', height: w.h * ky + 'px',
-      transform: matrix3d(homography(rectPts(0, 0, w.w * kx, w.h * ky), w.quad.map(([x, y]) => [x * kx, y * ky]))) });
-  } else {
-    el.style.transform = '';
-    place(el, w, s.w, s.h);
-  }
-  el.dataset.label = types[w.type].name + (w.quad ? ' · warped' : '');
+  const el = widEl(w), s = sectionOf(w.section);
+  if (!el || !s) return;
+  place(el, w, s.w, s.h);
+  el.dataset.label = types[w.type].name;
   applyLook(w, el);
 }
 const positionAll = () => L.sections.forEach(positionSection);
@@ -425,16 +423,16 @@ function applyLook(w, el) {
   el.dataset.icons = w.look.icons;
 }
 function drawWarpUI() {
-  const ui = $('#warpui'), t = target(), on = warpOn();
+  const ui = $('#warpui'), t = selS(), on = warpOn(), w = selW();
   ui.hidden = !on;
   wallEl.querySelectorAll('.warping').forEach(el => el.classList.remove('warping'));
-  if (on) (isSec(t) ? secEl(t) : widEl(t)).classList.add('warping');
+  if (on) secEl(t).classList.add('warping');
   $('#undo').disabled = !undo.length;
   $('#flatten').disabled = !(t && t.quad);
-  const name = !t ? '' : isSec(t) ? `section “${t.name}”` : parentOf(types[t.type]).name;
-  $('#warpState').textContent = !t ? 'Select a widget or section on the wall, then hold Shift to warp it.'
-    : (selS() && inside) ? 'Go back to the wall to warp this section.'
-    : on ? `Warping ${name}. Drag the colored corners.` : `Hold Shift to warp ${name}.`;
+  $('#warpState').textContent = w ? (types[w.type].keepAspect ? 'Widgets bend with their section. Hold Shift while resizing this one to crop it.' : 'Widgets bend with their section. Select a section and hold Shift to warp it.')
+    : !t ? 'Select a section on the wall, then hold Shift to warp it.'
+    : inside ? 'Go back to the wall to warp this section.'
+    : on ? `Warping “${t.name}”. Drag the colored corners.` : `Hold Shift to warp “${t.name}”.`;
   if (!t) { $('#readout').textContent = '–'; return; }
   const q = quadOf(t);
   $('#readout').textContent = `${CORNERS[corner]} · ${q[corner].map(Math.round).join(', ')}`;
@@ -557,7 +555,7 @@ function zoom(t, q0, f) {
   return setQuad(t, q0.map(([x, y]) => [cx + (x - cx) * f, cy + (y - cy) * f]));
 }
 function nudge(dx, dy) {
-  const t = target();
+  const t = selS();
   if (!t) return;
   pushUndo('nudge', t);
   const q = copy(quadOf(t));
@@ -852,7 +850,7 @@ function shrinkPhoto(file, max = 1280) {   // keep the projector's ~1 GB of RAM 
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      c.toBlob(b => b ? res(b) : rej(new Error('could not shrink')), 'image/jpeg', .85);
+      c.toBlob(b => { if (!b) return rej(new Error('could not shrink')); b.w = c.width; b.h = c.height; res(b); }, 'image/jpeg', .85);
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('not an image')); };
     img.src = url;
@@ -861,10 +859,17 @@ function shrinkPhoto(file, max = 1280) {   // keep the projector's ~1 GB of RAM 
 async function addPhotos(key, files) {
   const w = selW();
   if (!w) return;
-  const ids = (w.opts[key] || []).slice();
+  const ids = (w.opts[key] || []).slice(), wasEmpty = !ids.length;
+  let first = null;
   for (const f of files) {
-    try { const id = 'p' + uid() + uid(); await photoDB.put(id, await shrinkPhoto(f)); ids.push(id); }
+    try { const id = 'p' + uid() + uid(), b = await shrinkPhoto(f); await photoDB.put(id, b); ids.push(id); first = first || b; }
     catch (e) { console.warn('skipped a photo:', f.name, e.message); }
+  }
+  if (wasEmpty && first && types[w.type].keepAspect) {   // the box takes the first photo's proportions, so nothing is cropped
+    const sp = spaceOf(w), r = first.w / first.h;
+    w.h = Math.round(w.w / r);
+    if (w.h > sp.h) { w.h = sp.h; w.w = Math.round(w.h * r); }
+    fitInside(w, sp.w, sp.h); w.mode = autoMode(w); positionWidget(w);
   }
   setOpt(key, ids);
 }
@@ -884,6 +889,15 @@ function renderPhotoThumbs(box, key, ids) {
 }
 
 let drag = null, pinch = null;
+// resize from a corner but keep the start box's proportions (snapped width, kept inside the parent)
+function resizeKeep(b, s, dx, dy, dir, pw, ph) {
+  const r = s.w / s.h, left = dir.includes('w'), top = dir.includes('n');
+  let w = Math.max(s.w + (left ? -dx : dx), (s.h + (top ? -dy : dy)) * r);   // follow whichever edge moved further
+  const maxW = Math.min(left ? s.x + s.w : pw - s.x, (top ? s.y + s.h : ph - s.y) * r);
+  w = clamp(snap(w), Math.max(MIN, MIN * r), maxW);
+  const h = Math.round(w / r);
+  Object.assign(b, { w, h, x: left ? s.x + s.w - w : s.x, y: top ? s.y + s.h - h : s.y });
+}
 // the dashed box you see while drawing a new section (snapped to the grid, kept on the wall)
 function drawBox(d, p) {
   const x0 = clamp(snap(Math.min(d.p0[0], p[0])), 0, WALL_W), y0 = clamp(snap(Math.min(d.p0[1], p[1])), 0, WALL_H);
@@ -897,7 +911,7 @@ const pointers = new Map();
 function bindStage() {
   stageBox.addEventListener('pointerdown', e => {
     if (e.button > 0) return;
-    const p = panelPt(e), t = target();
+    const p = panelPt(e), t = selS();
     if (t && warpOn()) {   // Warp: corners, edges, inside; two fingers zoom
       pointers.set(e.pointerId, p);
       if (pointers.size === 2) {
@@ -948,8 +962,13 @@ function bindStage() {
     const l = toSpace(drag.t, p), dx = l[0] - drag.l0[0], dy = l[1] - drag.l0[1];
     if (drag.kind === 'move') return moveThing(drag.t, drag.start, dx, dy);
     if (drag.kind === 'resize') {
-      const sp = spaceOf(drag.t);
-      moveResize(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h); reposition(drag.t);
+      const sp = spaceOf(drag.t), m = !isSec(drag.t) && types[drag.t.type];
+      if (m && m.keepAspect && !shiftHeld) resizeKeep(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h);
+      else {
+        moveResize(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h);
+        if (m && m.keepAspect && drag.t.opts.fit !== 'fill') { drag.t.opts.fit = 'fill'; const i = inst.find(x => x.w === drag.t); if (i) updateInst(i); }   // Shift: crop
+      }
+      reposition(drag.t);
       if (!isSec(drag.t) && autoMode(drag.t) !== drag.t.mode) {   // shape follows the proportions
         drag.t.mode = autoMode(drag.t);
         const i = inst.find(x => x.w === drag.t);
@@ -988,7 +1007,7 @@ function bindStage() {
     if (sf && !(wf && sf.contains(wf))) enterSection(sf.dataset.sid);   // a widget of this section takes the double-click itself
   });
   stageBox.addEventListener('wheel', e => {
-    const t = target();
+    const t = selS();
     if (!t || !warpOn()) return;
     e.preventDefault();
     pushUndo('wheel', t); zoom(t, copy(quadOf(t)), Math.exp(-e.deltaY * 0.0015)); saveLayout();
@@ -1009,7 +1028,7 @@ function bindControls() {
     if (!w) return;
     if (e.key === 'Escape') { sel = null; selSec = null; renderChrome(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); flatten(w); return; }   // with nothing selected, Ctrl+R reloads as usual
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); flatten(selS()); return; }   // with nothing selected, Ctrl+R reloads as usual
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
     if (warpOn() && /^Digit[1-4]$/.test(e.code)) { corner = +e.code.slice(5) - 1; drawWarpUI(); return; }
     const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
@@ -1022,7 +1041,7 @@ function bindControls() {
 
   // warp tools
   $('#undo').onclick = doUndo;
-  $('#flatten').onclick = () => flatten(target());
+  $('#flatten').onclick = () => flatten(selS());
   // widget tools
   $('#del').onclick = deleteSelected;
   buildGallery();
@@ -1234,6 +1253,10 @@ function selfTest() {
   const sq = { id: 'x', x: 0, y: 0, w: 400, h: 300, quad: [[100, 50], [700, 120], [60, 500], [720, 430]] };
   const back2 = panelToLocal(sq, localToPanel(sq, [123, 77]));
   ok(Math.abs(back2[0] - 123) < 1e-6 && Math.abs(back2[1] - 77) < 1e-6, 'section mapping round-trips');
+  const kb = {}; resizeKeep(kb, { x: 0, y: 0, w: 400, h: 200 }, 100, 0, 'se', 1280, 720);
+  ok(kb.w === 504 && kb.h === 252 && kb.x === 0, 'photo resize keeps proportions', kb);
+  resizeKeep(kb, { x: 100, y: 100, w: 400, h: 200 }, -900, 0, 'nw', 1280, 720);
+  ok(kb.x >= 0 && kb.y >= 0 && Math.abs(kb.w / kb.h - 2) < .02, 'kept proportions stay inside', kb);
   const b = { x: 0, y: 0, w: 100, h: 100 };
   moveResize(b, Object.assign({}, b), 13, -50, '', 200, 200);
   ok(b.x === 16 && b.y === 0, 'move snaps to 8 px and stays inside', b);

@@ -143,11 +143,12 @@ BearWall.register({
   name: 'Photos',
   styleName: 'Slideshow',
   size: { square: [264, 264], rect: [488, 168] },
+  keepAspect: true,   // resizing keeps the photo's proportions; Shift + resize crops
   options: [
     { key: 'style', label: 'Style', type: 'tabs', choices: [['plain', 'Plain'], ['hologram', 'Hologram'], ['neon', 'Neon lines'], ['led', 'LED dots'], ['glitch', 'Glitch']], value: 'hologram' },
     { key: 'photos', label: 'Photos', type: 'photos', value: [] },
     { key: 'interval', label: 'Change every', type: 'tabs', choices: [['10', '10 s'], ['30', '30 s'], ['60', '1 min'], ['300', '5 min']], value: '30' },
-    { key: 'fit', label: 'Fit', type: 'tabs', choices: [['fill', 'Fill'], ['fit', 'Fit']], value: 'fill' },
+    { key: 'fit', label: 'Fit', type: 'tabs', choices: [['fit', 'Whole photo'], ['fill', 'Crop to box']], value: 'fit' },
     { key: 'kenburns', label: 'Slow pan and zoom (Plain)', type: 'switch', value: true },
     { key: 'caption', label: 'Show photo number', type: 'switch', value: false }
   ],
