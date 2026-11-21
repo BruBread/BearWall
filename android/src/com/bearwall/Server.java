@@ -35,7 +35,7 @@ import java.util.zip.ZipInputStream;
  *   GET/PUT /api/kv/{key}      saved state: layout, settings, devices, installed (JSON files)
  *   GET  /api/events           Server-Sent Events: "kv:{key}:{client}" after a save, "updating:{stage}" during an update, "reload" after it
  *   GET  /api/system           the projector's stats (Health.java)
- *   GET  /api/proxy?url=       fetches news / storm feeds for the page (only the hosts listed in PROXY_HOSTS)
+ *   GET  /api/proxy?url=       fetches news / storm feeds and the GitHub commit feed for the page (only the hosts listed in PROXY_HOSTS)
  *   PUT/GET/DELETE /api/photos/{id}   uploaded photos
  *   POST /api/update           downloads the newest web files from GitHub and swaps them in
  *   POST /api/live             passes the control page's live state (selected section) to the wall; not saved
@@ -50,7 +50,7 @@ class Server {
     static final int PORT = 8080;
     static final String TAG = "BearWall";
     static final String REPO_ZIP = "https://codeload.github.com/BruBread/BearWall/zip/refs/heads/main";
-    static final String[] PROXY_HOSTS = { "newsinfo.inquirer.net", "www.rappler.com", "www.gdacs.org" };
+    static final String[] PROXY_HOSTS = { "newsinfo.inquirer.net", "www.rappler.com", "www.gdacs.org", "github.com" };   // github.com: the commit feed for update checks
     static final Pattern KEY = Pattern.compile("[a-z]{1,20}"), PHOTO = Pattern.compile("[a-z0-9]{1,40}");
 
     final Context c;

@@ -1286,24 +1286,51 @@ async function checkNet() {
 // Phase 1: "Update projector" makes the projector app download the new web files from GitHub. In the prototype
 // it just records the new version as installed and reloads.
 let upd = { state: 'checking' };
+// The newest commit on GitHub: { sha, msg, date }. On the projector it comes through the app from the repo's commit feed,
+// which has no hourly cap; GitHub's API allows only 60 unsigned requests an hour per home connection, shared by every device.
+const REPO = 'BruBread/BearWall';
+async function latestCommit() {
+  if (ON_PROJECTOR) {
+    const r = await fetch('/api/proxy?url=' + encodeURIComponent(`https://github.com/${REPO}/commits/main.atom`), { cache: 'no-store' });
+    if (!r.ok) throw new Error('feed ' + r.status);
+    const e = new DOMParser().parseFromString(await r.text(), 'application/xml').querySelector('entry');
+    const sha = e && (e.querySelector('id').textContent.match(/Commit\/([0-9a-f]{40})/) || [])[1];
+    if (!sha) throw new Error('no commit in the feed');
+    const html = new DOMParser().parseFromString(e.querySelector('content').textContent, 'text/html').body.textContent.trim();
+    return { sha, msg: html.split('\n')[0], date: new Date(e.querySelector('updated').textContent) };
+  }
+  const r = await fetch(`https://api.github.com/repos/${REPO}/commits/main`, { cache: 'no-store' });
+  if (r.headers.get('x-ratelimit-remaining') === '0') {   // out of the hourly budget: say when it comes back
+    const err = new Error('rate limited');
+    err.retry = Math.max(1, Math.ceil((+r.headers.get('x-ratelimit-reset') * 1000 - Date.now()) / 60000));
+    throw err;
+  }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  return { sha: j.sha, msg: String(j.commit.message).split('\n')[0], date: new Date(j.commit.committer.date) };
+}
+let updRetry = null;
 async function checkUpdate() {
+  clearTimeout(updRetry);
   try {
-    const r = await fetch('https://api.github.com/repos/BruBread/BearWall/commits/main', { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json(), sha = j.sha, installed = store.get('installed', null);
-    if (!installed) store.set('installed', sha);   // the first check sets the baseline
-    if (!installed || installed === sha) { upd = { state: 'current', sha }; clearAlert('update'); }
+    const c = await latestCommit(), installed = store.get('installed', null);
+    if (!installed) store.set('installed', c.sha);   // the first check sets the baseline
+    if (!installed || installed === c.sha) { upd = { state: 'current', sha: c.sha }; clearAlert('update'); }
     else {
-      upd = { state: 'available', sha, msg: String(j.commit.message).split('\n')[0], date: new Date(j.commit.committer.date) };
-      setAlert('update', { kind: 'update', level: 'info', title: 'Update available', detail: `${sha.slice(0, 7)} · ${upd.msg}` });
+      upd = Object.assign({ state: 'available' }, c);
+      setAlert('update', { kind: 'update', level: 'info', title: 'Update available', detail: `${c.sha.slice(0, 7)} · ${c.msg}` });
     }
-  } catch (e) { upd = { state: 'unknown' }; }
+  } catch (e) {
+    upd = e.retry ? { state: 'busy', retry: e.retry } : { state: 'unknown' };
+    if (e.retry) updRetry = setTimeout(checkUpdate, e.retry * 60000 + 5000);
+  }
   renderUpdate();
 }
 function renderUpdate() {
   $('#updState').textContent = upd.state === 'checking' ? 'Checking for updates…'
     : upd.state === 'current' ? `Up to date · ${upd.sha.slice(0, 7)}`
-    : upd.state === 'available' ? `Update available · ${upd.sha.slice(0, 7)}` : "Can't check for updates here.";
+    : upd.state === 'available' ? `Update available · ${upd.sha.slice(0, 7)}`
+    : upd.state === 'busy' ? `GitHub is busy · checking again in ${upd.retry} min` : "Can't check for updates here.";
   $('#updBtn').hidden = upd.state !== 'available';
   $('#updNote').hidden = upd.state !== 'available';
   if (upd.state === 'available') $('#updNote').textContent = `${upd.msg} · ${upd.date.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
