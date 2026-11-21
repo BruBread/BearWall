@@ -38,6 +38,7 @@ const stat = (type, styleName, read, options = [], ring = true) => Object.assign
 
 const temp = stat('projector', 'Temperature', (s, o) => {
   const L = lim(o, 'limit', 75), t = s.temp;
+  if (t == null) return { pct: 0, value: '—', unit: '', title: 'Projector chip', level: 'ok', detail: 'No temperature sensor found' };
   return { pct: t, value: t, unit: '°C', title: 'Projector chip',
     level: t >= L + 8 ? 'critical' : t >= L ? 'warning' : 'ok',
     detail: t >= L + 8 ? 'Too hot · let it cool down' : t >= L ? 'Running hot' : t >= L - 15 ? 'Warm, all fine' : 'Cool' };

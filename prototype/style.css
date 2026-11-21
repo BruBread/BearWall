@@ -236,3 +236,13 @@ select.field option { background: #24183f; color: var(--text); }
 .readout { font-family: var(--mono); font-size: 13px; color: var(--text); text-transform: none; letter-spacing: 0; }
 #warpState { min-height: 2.9em; }
 @media (prefers-reduced-motion: reduce) { .chip, .tabs button, .switch, .switch::after { transition: none; } }
+
+/* /wall on the projector: only the wall, fullscreen, nothing to click (you edit from /control on your laptop) */
+.wallmode body { background: #000; overflow: hidden; }
+.wallmode .blob, .wallmode header, .wallmode .top > .col, .wallmode .top > .grid, .wallmode .stage-head, .wallmode #warpui, .wallmode #drawBox { display: none !important; }
+.wallmode main { max-width: none; margin: 0; padding: 0; }
+.wallmode .top { display: block; margin: 0; }
+.wallmode .stage-card { position: fixed; inset: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: #000; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.wallmode .wall-wrap, .wallmode .stage-box { height: 100%; padding: 0; border-radius: 0; }
+.wallmode .stage-box { pointer-events: none; }
+.wallmode .stage { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; box-shadow: none; }

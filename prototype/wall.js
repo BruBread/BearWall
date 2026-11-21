@@ -88,10 +88,28 @@ const uid = () => Math.random().toString(36).slice(2, 8);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pad = n => String(n).padStart(2, '0');
 
-// Saved per browser. Phase 1 moves this to the projector's /api/layout and /api/settings.
+// On the projector the page comes from the BearWall app: /wall is what the projector shows, /control is your laptop.
+// There the layout, settings and device switches live in the app (shared by both, live), not in this browser.
+const ON_PROJECTOR = /^https?:$/.test(location.protocol) && /^\/(wall|control)\/?$/.test(location.pathname);
+const WALL_ONLY = ON_PROJECTOR && location.pathname.startsWith('/wall');
+if (WALL_ONLY) document.documentElement.classList.add('wallmode');
+const CLIENT = Math.random().toString(36).slice(2, 10);   // so a page ignores the echo of its own saves
+const SHARED = ['layout', 'settings', 'devices', 'installed'], shared = {}, putTimers = {};
+function queuePut(k) {   // save to the app a moment after the last change
+  clearTimeout(putTimers[k]);
+  putTimers[k] = setTimeout(() => fetch('/api/kv/' + k, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Client': CLIENT },
+    body: JSON.stringify(shared[k]) }).catch(() => {}), 250);
+}
+// Elsewhere (opened as a file, or the artifact) everything is saved in this browser.
 const store = {
-  get(k, d) { try { const v = JSON.parse(localStorage.getItem('bearwall.' + k)); return v == null ? d : v; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('bearwall.' + k, JSON.stringify(v)); } catch (e) {} }
+  get(k, d) {
+    if (ON_PROJECTOR && SHARED.includes(k)) return shared[k] == null ? d : copy(shared[k]);
+    try { const v = JSON.parse(localStorage.getItem('bearwall.' + k)); return v == null ? d : v; } catch (e) { return d; }
+  },
+  set(k, v) {
+    if (ON_PROJECTOR && SHARED.includes(k)) { shared[k] = copy(v); queuePut(k); return; }
+    try { localStorage.setItem('bearwall.' + k, JSON.stringify(v)); } catch (e) {}
+  }
 };
 
 /* ---------- shared helpers for widgets ---------- */
@@ -671,6 +689,7 @@ function buildGallery() {
   });
 }
 function renderGallery(now = timeNow(), weather = weatherNow(now)) {
+  if (WALL_ONLY) return;   // nothing to pick from on the projector's own view
   $('#gallery').querySelectorAll('.gitem').forEach(b => {
     const m = types[b.dataset.type], el = b.querySelector('.wgt');
     const ctx = { mode: 'square', anchor: 'right', opts: defaultOpts(m), look: DEFAULT_LOOK, now, motion: 'off', settings: S, city: S.city, weather,
@@ -849,7 +868,11 @@ function toggleWindow() {
 }
 
 /* ---------- photos: shrunk on the way in, kept in this browser (IndexedDB) until the projector app stores them ---------- */
-const photoDB = (() => {
+const photoDB = ON_PROJECTOR ? {   // on the projector, photos are uploaded to the app
+  put: (id, blob) => fetch('/api/photos/' + id, { method: 'PUT', body: blob }).then(r => { if (!r.ok) throw new Error('upload failed'); }),
+  get: () => Promise.resolve(null),
+  del: id => fetch('/api/photos/' + id, { method: 'DELETE' })
+} : (() => {
   let dbp = null;
   const open = () => dbp || (dbp = new Promise((res, rej) => {
     const r = indexedDB.open('bearwall-photos', 1);
@@ -860,7 +883,7 @@ const photoDB = (() => {
   return { put: (id, blob) => tx('readwrite', st => st.put(blob, id)), get: id => tx('readonly', st => st.get(id)), del: id => tx('readwrite', st => st.delete(id)) };
 })();
 const photoURLs = {};
-util.photoURL = id => photoURLs[id] ? Promise.resolve(photoURLs[id])
+util.photoURL = ON_PROJECTOR ? id => Promise.resolve('/api/photos/' + id) : id => photoURLs[id] ? Promise.resolve(photoURLs[id])
   : photoDB.get(id).then(b => b ? (photoURLs[id] = URL.createObjectURL(b)) : null).catch(() => null);
 function shrinkPhoto(file, max = 1280) {   // keep the projector's ~1 GB of RAM happy
   return new Promise((res, rej) => {
@@ -1149,7 +1172,17 @@ const TESTS = [['net-down', 'Offline'], ['device', 'New device'], ['hot', 'Hot']
   ['uptime', 'Uptime'], ['power', 'Power cut'], ['malware', 'Malware'], ['adb', 'ADB']];
 const BOOT_AT = Date.now() - (3 * 864e5 + 4 * 3600e3), WATCH_AT = Date.now();
 const WIFI = [['Router', 'TP-Link'], ['BearWall projector', 'Rockchip'], ['Laptop', 'Lenovo'], ['Phone', 'Samsung'], ['Smart bulb', 'Tuya'], ['TV box', 'Xiaomi'], ['Printer', 'Epson']];
+let realSys = null;   // the app's /api/system, on the projector
+async function pollSystem() { try { const r = await fetch('/api/system', { cache: 'no-store' }); if (r.ok) realSys = await r.json(); } catch (e) {} }
 function systemNow(now = Date.now()) {
+  if (realSys) {   // real stats; the root-only ones stay null until the projector's watchdog script writes them
+    const sim = simSystem(now);
+    return Object.assign(sim, realSys, { sample: false, temp: realSys.temp == null ? null : realSys.temp, powerCuts: realSys.powerCuts || [],
+      wifi: realSys.wifi || null, malware: realSys.malware || null, adb: realSys.adb || null, update: upd });
+  }
+  return simSystem(now);
+}
+function simSystem(now) {
   const wave = (period, amp) => Math.sin(now / 1000 / period) * amp, f = FORCE;
   const checked = WATCH_AT + Math.floor((now - WATCH_AT) / 120e3) * 120e3;   // the watchdogs "run" every 2 min
   return {
@@ -1241,7 +1274,18 @@ function bindDevices() {
     else { FORCE[id] = !FORCE[id]; render(); }
     document.querySelectorAll('#alertTest button').forEach(x => x.classList.toggle('on', !!FORCE[x.dataset.id] || alerts.some(a => a.id === x.dataset.id)));
   };
-  $('#updBtn').onclick = () => { if (upd.sha) { store.set('installed', upd.sha); location.reload(); } };
+  $('#updBtn').onclick = async () => {
+    if (!upd.sha) return;
+    if (!ON_PROJECTOR) { store.set('installed', upd.sha); location.reload(); return; }
+    const b = $('#updBtn');
+    b.disabled = true; b.textContent = 'Updating…';   // the app downloads the new web files from GitHub; every page reloads
+    try {
+      const r = await fetch('/api/update', { method: 'POST' });
+      if (!r.ok) throw new Error('update failed');
+      store.set('installed', upd.sha);
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { b.disabled = false; b.textContent = 'Update failed · try again'; }
+  };
   window.addEventListener('online', checkNet);
   window.addEventListener('offline', checkNet);
 }
@@ -1313,8 +1357,33 @@ function selfTest() {
 
 /* ---------- public API ---------- */
 let booted = false;
+// the app tells pages when the other side saved something ("kv:layout:<client>") or after an update ("reload")
+function listen() {
+  const es = new EventSource('/api/events');
+  es.onmessage = e => {
+    if (e.data === 'reload') return location.reload();
+    const [, k, who] = e.data.split(':');
+    if (who === CLIENT || !SHARED.includes(k)) return;
+    fetch('/api/kv/' + k, { cache: 'no-store' }).then(r => r.json()).then(v => {
+      shared[k] = v;
+      if (k === 'layout' && !drag) { L = store.get('layout', null); normalize(); buildStage(); }
+      else if (k === 'settings') { Object.assign(S, store.get('settings', {})); buildStage(); }
+      else if (k === 'devices') { Object.assign(DEV, store.get('devices', {})); render(); }
+    }).catch(() => {});
+  };
+}
+async function loadShared() {
+  await Promise.all(SHARED.map(k => fetch('/api/kv/' + k, { cache: 'no-store' }).then(r => r.json()).then(v => { shared[k] = v; }).catch(() => {})));
+  L = store.get('layout', null);
+  Object.assign(S, store.get('settings', {}));
+  Object.assign(DEV, store.get('devices', {}));
+}
+
 window.BearWall = {
   util,
+  toggleWindow: () => toggleWindow(),   // the remote's MENU button (the app calls this)
+  // feeds a page can't fetch itself (news for Walang Pasok); only the projector app can do this
+  proxy: ON_PROJECTOR ? url => fetch('/api/proxy?url=' + encodeURIComponent(url)).then(r => { if (!r.ok) throw new Error('proxy ' + r.status); return r.text(); }) : undefined,
   register(m) {
     types[m.type] = m;
     if (m.css) { const st = document.createElement('style'); st.textContent = m.css; document.head.appendChild(st); }
@@ -1325,9 +1394,10 @@ window.BearWall = {
     if (m.css) { const st = document.createElement('style'); st.textContent = m.css; document.head.appendChild(st); }
     if (booted) { normalize(); buildStage(); }
   },
-  boot() {
+  async boot() {
     if (booted) return;
     booted = true;
+    if (ON_PROJECTOR) { await Promise.all([loadShared(), pollSystem()]); listen(); setInterval(pollSystem, 10000); }
     stage = $('#stage'); stageBox = $('#stageBox'); wallEl = $('#wall');
     selfTest();
     normalize();

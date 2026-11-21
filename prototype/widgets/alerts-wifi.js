@@ -6,10 +6,12 @@ const ICON = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 15a22 22 0
 BearWall.register(BearWall.alertModule('wifi', 'alerts-wifi', 'Wi-Fi devices', 'Wi-Fi devices', {
   icon: ICON,
   idle: ctx => {
+    if (!ctx.system.wifi) return { title: 'Wi-Fi devices', detail: 'Waiting for the projector watchdog' };
     const d = ctx.system.wifi, last = d.filter(x => x.known).slice(-1)[0];
     return { title: `${d.length} devices on Wi-Fi`, detail: last ? `All known · ${last.name} (${last.vendor})` : 'All known' };
   },
   alert: ctx => {
+    if (!ctx.system.wifi) return null;
     const n = ctx.system.wifi.filter(x => !x.known).slice(-1)[0];
     return n && { id: 'wifi-' + n.name, level: 'info', title: `New device: ${n.name}`, detail: `${n.vendor} · joined ${U.ago(n.since)}` };
   }
