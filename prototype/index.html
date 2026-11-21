@@ -25,49 +25,76 @@
         <button class="btn" id="full">Fullscreen</button>
       </div>
     </div>
-    <div class="wall-wrap" id="wallWrap"><div class="stage m-full" id="stage"></div></div>
+    <div class="wall-wrap" id="wallWrap">
+      <div class="stage-box" id="stageBox">
+        <div class="stage m-full" id="stage"><div class="wall" id="wall"></div></div>
+        <div class="warpui" id="warpui" hidden>
+          <svg viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true"><polygon></polygon></svg>
+          <i class="eh" data-e="0"></i><i class="eh" data-e="1"></i><i class="eh" data-e="2"></i><i class="eh" data-e="3"></i>
+          <i class="ch" data-i="0"></i><i class="ch" data-i="1"></i><i class="ch" data-i="2"></i><i class="ch" data-i="3"></i>
+        </div>
+      </div>
+    </div>
   </section>
 
   <div class="grid">
     <section class="glass">
       <h2>Layout</h2>
-      <div class="sub">Turn on set-area mode. Drag a widget to move it and drag its corners to resize it. Move a screen by dragging its pink name tag. Everything snaps to an 8 px grid on the 1280 × 720 wall.</div>
-      <label class="row">Set-area mode<input type="checkbox" class="switch" id="edit"></label>
-      <div class="lbl"><span>Selected</span></div>
-      <div class="selname" id="selName">Nothing selected</div>
+      <div class="sub">View shows exactly what the projector shows. Arrange moves widgets around the wall. Warp bends the whole picture to fit your wall, like the keystone page.</div>
+      <div class="lbl"><span>Mode</span></div>
+      <div class="tabs" id="lmode"><button data-v="view">View</button><button data-v="arrange">Arrange</button><button data-v="warp">Warp</button></div>
 
-      <div id="screenTools" hidden>
-        <div class="lbl"><span>Screen name</span></div>
-        <input class="field" id="screenName" maxlength="32" autocomplete="off" aria-label="Screen name">
-        <div class="lbl"><span>Wall shape</span></div>
-        <button class="btn quiet" id="warp">Warp corners</button>
-        <div class="note" id="warpNote" hidden>Drag the 4 white pins until this screen looks straight on the real wall. Arrow keys move the last pin you touched by 1 px (Shift: 8 px). On a monitor a warped screen looks skewed. That's expected.</div>
-      </div>
-
-      <div id="widgetTools" hidden>
-        <div class="lbl"><span>Mode</span></div>
-        <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
-        <div id="anchorRow">
-          <div class="lbl"><span>Hug corner</span></div>
-          <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
+      <div id="arrangeTools" hidden>
+        <div class="lbl"><span>Selected</span></div>
+        <div class="selname" id="selName">Nothing selected</div>
+        <div id="widgetTools" hidden>
+          <div class="lbl"><span>Shape</span></div>
+          <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
+          <div id="anchorRow">
+            <div class="lbl"><span>Hug corner</span></div>
+            <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
+          </div>
+          <div id="widgetOpts"></div>
         </div>
-        <div id="widgetOpts"></div>
-        <div class="lbl"><span>Screen</span></div>
-        <select class="field" id="moveTo" aria-label="Move to another screen"></select>
-        <button class="btn quiet" id="selParent">Select its screen</button>
+        <div class="lbl"><span>Add</span></div>
+        <div class="add">
+          <select class="field" id="addType" aria-label="Widget type"></select>
+          <button class="btn" id="addWidget">Add widget</button>
+        </div>
+        <div class="actions">
+          <button class="btn danger" id="del" disabled>Delete</button>
+          <button class="btn quiet" id="reset">Reset widgets</button>
+        </div>
+        <div class="note">Drag a widget to move it and drag its corners to resize it. Everything snaps to an 8 px grid on the 1280 × 720 wall. Arrow keys move the selection 8 px, Shift + arrows resize it, Delete removes it, Esc deselects.</div>
       </div>
 
-      <div class="lbl"><span>Add</span></div>
-      <div class="add">
-        <select class="field" id="addType" aria-label="Widget type"></select>
-        <button class="btn" id="addWidget">Add widget</button>
+      <div id="warpTools" hidden>
+        <div class="lbl"><span>Corner</span><span class="readout" id="readout"></span></div>
+        <div class="corners" id="corners">
+          <button data-i="0"><span class="dot" style="background:var(--lt)"></span>Top left</button>
+          <button data-i="1"><span class="dot" style="background:var(--rt)"></span>Top right</button>
+          <button data-i="2"><span class="dot" style="background:var(--lb)"></span>Bottom left</button>
+          <button data-i="3"><span class="dot" style="background:var(--rb)"></span>Bottom right</button>
+        </div>
+        <div class="nudge">
+          <div class="dpad" id="dpad">
+            <span></span><button data-nudge="0,-1" aria-label="Up">↑</button><span></span>
+            <button data-nudge="-1,0" aria-label="Left">←</button><span></span><button data-nudge="1,0" aria-label="Right">→</button>
+            <span></span><button data-nudge="0,1" aria-label="Down">↓</button><span></span>
+          </div>
+          <div class="side">
+            <div class="lbl" style="margin-top:0"><span>Step</span></div>
+            <div class="tabs" id="step"><button data-v="1">1 px</button><button data-v="10">10 px</button></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn quiet" id="undo" disabled>Undo</button>
+          <button class="btn quiet" id="grid">Show grid</button>
+          <button class="btn quiet" id="fullPanel">Full panel</button>
+          <button class="btn quiet" id="factory">Factory warp</button>
+        </div>
+        <div class="note">Drag a corner. Drag an edge's square to stretch that side. Drag inside to move the whole picture. Scroll or pinch to zoom. Keys: 1–4 pick a corner, arrows nudge (Shift ×10), Ctrl+Z undo, G grid.</div>
       </div>
-      <div class="actions">
-        <button class="btn quiet" id="addScreen">Add screen</button>
-        <button class="btn danger" id="del" disabled>Delete</button>
-        <button class="btn quiet" id="reset">Reset layout</button>
-      </div>
-      <div class="note">Arrow keys move the selection 8 px. Shift + arrows resize it. Delete removes it. Esc deselects.</div>
     </section>
 
     <section class="glass">

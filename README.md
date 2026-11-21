@@ -13,8 +13,11 @@ Planning is done and the interactive prototype works. Phase 1 (the real app on t
 Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need a build step or a server.
 
 - **The wall:** the black 16:9 box shows exactly what the projector would show. **Fullscreen** shows it the way it looks on the wall.
-- **Set-area mode:** drag widgets around inside their screen and drag the corners to resize them. Move a screen by dragging its pink name tag. Everything snaps to an 8 px grid on a 1280 × 720 wall. Arrow keys nudge the selection, Shift + arrows resize it, and Delete removes it.
-- **Corner pins:** the projector usually doesn't hit one flat wall square-on. Select a screen, press **Warp corners**, and drag its 4 pins until it looks straight on the real wall. Each screen gets its own warp, so one screen can sit on each side of a room corner.
+- **Arrange:** drag widgets around the wall and drag their corners to resize them. Everything snaps to an 8 px grid on a 1280 × 720 wall. Arrow keys nudge the selection, Shift + arrows resize it, and Delete removes it.
+- **Warp:** the projector usually doesn't hit the wall square-on, so the whole picture gets one 4-corner warp, like the keystone page in [ProjectorRoot](https://github.com/BruBread/ProjectorRoot).
+  - Drag a corner, drag an edge's square to stretch that side, or drag inside to move the picture. Scroll or pinch to zoom.
+  - Nudge a corner with the arrow keys or the on-screen D-pad, in 1 px or 10 px steps.
+  - Undo, a projected alignment grid, Full panel, and Factory warp.
 - **Widgets:** weather, clock, date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
 - **Styling:** ring color and thickness, glow, icon colors, and four motion levels.

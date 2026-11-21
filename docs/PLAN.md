@@ -14,37 +14,36 @@ This is the design for BearWall: what it does, the decisions behind it, and the 
 
 ## Layout model
 
-- The **wall** holds **screens**. A screen is an area you place on the wall in set-area mode, for example "Above desk" or "Corner".
-- **Widgets** sit inside a screen. You drag and resize them freely, and they snap to an 8 px grid.
+- The **wall** is one 1280 × 720 surface. **Widgets** sit directly on it. You drag and resize them freely, and they snap to an 8 px grid.
 - Each widget slot can hold a **priority stack**: the first widget that has something to show wins. There's also an optional rotate mode.
 - Every widget has two modes:
   - **Square:** spread out.
-  - **Rectangle:** one row, for corners. It stacks with other widgets, and its anchor (left or right) mirrors the order so it hugs the corner.
+  - **Rectangle:** one row, for corners. Its anchor (left or right) mirrors the order so it hugs the corner.
 - **Text never overlaps** other parts of a widget. It shrinks to fit down to 50%, then gets an ellipsis.
 
 The prototype already uses the layout shape that `layout.json` will use:
 
 ```json
-{ "screens": [
-  { "id": "s1", "name": "Above desk", "x": 88, "y": 112, "w": 400, "h": 400,
-    "widgets": [ { "id": "w1", "type": "weather", "mode": "square", "x": 16, "y": 16, "w": 368, "h": 368 } ] }
-] }
+{ "warp": [[64, 36], [1216, 36], [64, 684], [1216, 684]],
+  "widgets": [ { "id": "w1", "type": "weather", "mode": "square", "anchor": "right",
+                 "x": 64, "y": 120, "w": 264, "h": 264, "opts": {} } ] }
 ```
 
-Screen coordinates are wall pixels (1280 × 720). Widget coordinates are relative to their screen.
+Widget coordinates are wall pixels. `warp` is `null` (the full panel) or the wall's 4 corners on the projector panel in panel pixels, in the order top-left, top-right, bottom-left, bottom-right.
 
 ## Warping onto a real wall
 
-The projector doesn't point at one flat wall square-on, and the surface can be a room corner, a wall plus the ceiling, or furniture in the way. ProjectorRoot's keystone tool uses the projector's built-in 4-corner keystone. That is one warp for the whole image, so it can only straighten one flat surface.
-
-BearWall warps **per screen** instead:
-- Each screen sits on one flat surface and can have a `quad`: its 4 corners on the wall in wall pixels, in the order top-left, top-right, bottom-left, bottom-right.
-- The screen lays out flat at its own `w` × `h`. A CSS `matrix3d` homography maps that rectangle onto the quad. The GPU does this natively, and Chrome 95 supports it.
-- Widgets inside a screen don't know about the warp. Dragging a widget undoes the warp with the reverse mapping, so drags still feel right.
-- Pins refuse folded or mirrored shapes.
-- A screen can't bend around a corner. Put one screen on each side instead. Curved surfaces would need a mesh warp, which isn't planned.
-- The hardware keystone can stay neutral. That may also make animation cheaper, because SurfaceFlinger then has no keystone pass to redo every frame. Measure this in Phase 1.
-- This replaces the earlier plan for a root-only "warp card" that pushed `persist.sys.keystone.*` props. Root for the app is still unverified, and this approach doesn't need it.
+The projector doesn't hit the wall square-on, so the whole picture gets **one 4-corner warp**. This works the same way as ProjectorRoot's keystone page:
+- **Moves:**
+  - Drag a corner.
+  - Drag an edge's square to stretch that side.
+  - Drag inside to move the picture.
+  - Scroll or pinch to zoom.
+- **Fine control:** nudge one corner by 1 or 10 px with the arrow keys or a D-pad.
+- **Tools:** undo, a projected alignment grid, Full panel, and Factory warp (the projector's 90% default).
+- **How it's drawn:** the wall lays out flat at panel size, and a CSS `matrix3d` homography maps it onto the 4 corners. The GPU does this natively, and Chrome 95 supports it. Widgets don't know about the warp. Dragging a widget undoes the warp with the reverse mapping, so drags still feel right on a bent wall.
+- **Limits:** corners stay on the panel, and folded or mirrored shapes are refused. One warp straightens one flat surface at any angle. A second wall or the ceiling in the picture would still look bent.
+- **No root needed:** the wall page applies the warp itself, so this replaces the earlier root-only plan to push `persist.sys.keystone.*` props. With the hardware keystone neutral, animation may also get cheaper, because SurfaceFlinger then has no keystone pass to redo every frame. Measure this in Phase 1.
 
 ## Look
 
@@ -113,7 +112,7 @@ BearWall warps **per screen** instead:
    - the widget module contract: `{ name, modes, settings schema, defaults, mount(), update() }`
    - the API list
 
-   Calibrate the per-screen corner pins on the real wall from a phone, and measure motion cost with the hardware keystone neutral.
+   Calibrate the warp on the real wall from a phone, and measure motion cost with the hardware keystone neutral.
 2. **PC agent** and the first dynamic widgets: PC stats, now playing, On Air.
 3. The rest of the standalone widgets.
 4. The rest of the dynamic widgets, then the v2 extras.
