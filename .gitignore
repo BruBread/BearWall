@@ -17,3 +17,7 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Android build output and the local signing key (reinstalls must use the same key)
+android/build/
+android/debug.keystore
