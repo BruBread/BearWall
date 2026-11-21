@@ -29,6 +29,12 @@
       <div class="gallery" id="gallery"></div>
       <div class="actions"><button class="btn quiet" id="reset">Reset widgets</button></div>
     </section>
+    <section class="glass side" aria-label="Projector">
+      <h2>Projector</h2>
+      <div class="sub" id="updState">Checking for updates…</div>
+      <div class="note" id="updNote" hidden></div>
+      <div class="actions col"><button class="btn" id="updBtn" hidden title="In Phase 1 the projector downloads the new web files from GitHub. Here it just marks the new version as installed and reloads.">Update projector</button></div>
+    </section>
     </div>
     <section class="glass stage-card">
       <div class="stage-head">
@@ -102,6 +108,8 @@
             <div class="lbl"><span>Hug corner</span></div>
             <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
           </div>
+          <div class="lbl"><span>Show when</span></div>
+          <div class="tabs" id="wWhen"><button data-v="always">Always</button><button data-v="laptop">Laptop connected</button><button data-v="phone">Phone connected</button></div>
           <div id="widgetOpts"></div>
 
           <div class="actions"><button class="btn danger" id="del">Delete widget</button></div>
@@ -137,6 +145,18 @@
         <input class="field" id="name" placeholder="Optional" maxlength="24" autocomplete="off" aria-label="Name in greeting">
       </section>
 
+      <section class="glass" aria-label="Devices">
+        <h2>Devices</h2>
+        <div class="sub">Phase 2 preview: pretend a device joined your Wi-Fi and see how the wall changes. Widgets follow their "Show when" setting.</div>
+        <label class="row">Laptop connected<input type="checkbox" class="switch" id="devLaptop"></label>
+        <label class="row">Phone connected<input type="checkbox" class="switch" id="devPhone"></label>
+        <label class="row">Mic in use (On Air)<input type="checkbox" class="switch" id="devMic"></label>
+        <label class="row">Camera in use (On Air)<input type="checkbox" class="switch" id="devCam"></label>
+        <div class="lbl"><span>Test alerts</span></div>
+        <div class="alertbtns" id="alertTest"></div>
+        <div class="note">These are simulated. Later the projector finds devices itself: it pings every address on your network, reads its neighbor table, looks up each brand from the hardware address, and reads the names devices announce (mDNS). Phones use a random hardware address on each network, so you register yours once. The PC agent reports music, mic and camera.</div>
+      </section>
+
 
     </div>
   </div>
@@ -149,4 +169,11 @@
 <script src="widgets/date.js"></script>
 <script src="widgets/sky.js"></script>
 <script src="widgets/hourly.js"></script>
+<script src="widgets/alerts.js"></script>
+<script src="widgets/alerts-projector.js"></script>
+<script src="widgets/alerts-security.js"></script>
+<script src="widgets/alerts-update.js"></script>
+<script src="widgets/pc.js"></script>
+<script src="widgets/pc-stats.js"></script>
+<script src="widgets/pc-onair.js"></script>
 <script>BearWall.boot();</script>

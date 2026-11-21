@@ -75,6 +75,13 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 .stage.sel-on .wall { background-image: linear-gradient(#ffffff10 1px, transparent 1px), linear-gradient(90deg, #ffffff10 1px, transparent 1px); background-size: 2.5% 4.444%; }
 .stage.sel-on .widget { outline: 1px dashed #ffffff40; outline-offset: -1px; cursor: pointer; }
 .stage.sel-on .widget.sel { z-index: 2; cursor: move; outline: 2px solid var(--c); outline-offset: -2px; border-radius: 4px; }
+/* Show when: a widget whose device isn't connected is hidden in View and faint while arranging */
+.widget.off { visibility: hidden; }
+.stage.sel-on .widget.off { visibility: visible; opacity: .25; }
+.stage.sel-on .widget.off::before { content: attr(data-label) ' · hidden'; position: absolute; z-index: 3; right: 4px; bottom: 4px; font: 800 clamp(10px, 1.1vw, 13px) var(--ui); white-space: nowrap; padding: 3px 9px; border-radius: 7px; background: #000d; color: var(--w-text); }
+.alertbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.alertbtns .btn { padding: 7px 12px; font-size: 13px; }
+.alertbtns .btn.on { background: #fff; color: #1b1035; }
 .widget.sel::before { content: attr(data-label); position: absolute; z-index: 3; right: 4px; bottom: 4px; font: 800 clamp(10px, 1.1vw, 13px) var(--ui); white-space: nowrap; padding: 3px 9px; border-radius: 7px; background: #000d; color: var(--c); }
 .handle { position: absolute; z-index: 4; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px var(--c); display: none; }
 .handle::after { content: ''; position: absolute; inset: -9px; }

@@ -41,7 +41,8 @@ BearWall.register({
     if (ic._svg !== svg) { ic.innerHTML = svg; ic._svg = svg; }
     U.setRing(el.querySelector('.ring'), w.hum);
     U.countTo(el.querySelector('.n'), w.temp, ctx.motion);
-    U.typeOut(el.querySelector('.gr'), greeting(ctx.now.getHours(), ctx.settings.name), ctx.motion);
+    const d = ctx.devices, home = d && d.phone && d.phoneSince && Date.now() - d.phoneSince < 10 * 60 * 1000;   // phone just joined the Wi-Fi
+    U.typeOut(el.querySelector('.gr'), home ? 'Welcome home' + (ctx.settings.name.trim() ? `, ${ctx.settings.name.trim()}` : '') : greeting(ctx.now.getHours(), ctx.settings.name), ctx.motion);
     el.querySelector('.mt').textContent = [ctx.city.name, ctx.opts.feels && `feels ${w.feels}°`, ctx.opts.hilo && `H ${w.hi}° L ${w.lo}°`].filter(Boolean).join(' · ');
     U.fit(el);
   }

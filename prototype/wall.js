@@ -10,6 +10,7 @@
  *   name: 'Clock',                    // label in the "Add widget" menu
  *   family: 'clock',                  // optional: makes this module a style of the 'clock' widget instead of its own widget
  *   styleName: 'Date',                // its tab in the Style row (a parent without a `style` option uses its own styleName)
+ *   when: 'laptop',                   // optional: default "Show when" for new widgets ('always' | 'laptop' | 'phone')
  *   size: { square: [240, 240], rect: [464, 104] },   // default box in wall px for each mode
  *   options: [                        // per-widget settings, shown in the Layout card when the widget is selected
  *     { key: 'style', label: 'Style', type: 'tabs', choices: [['digital', 'Digital'], ['analog', 'Analog']], value: 'digital' },
@@ -43,7 +44,12 @@
  *   city,        // { name, admin, lat, lon }
  *   weather: { live, cond, temp, hum, feels, hi, lo, night, sunrise: Date, sunset: Date,
  *              hourly: [{ time: Date, temp, cond, night, pop }] },   // next 24 h from this hour, pop = rain chance %
+ *   devices: { laptop, phone, phoneSince: Date | null, mic, cam },  // which devices are on the network (simulated
+ *                // from the Devices card until the projector app / PC agent detect them); mic/cam = On Air state
+ *   alerts: [{ id, kind: 'network' | 'projector' | 'security' | 'update', level: 'info' | 'warning' | 'critical',
+ *              title, detail, since: Date }],   // active alerts; empty when all is well
  * }
+ * Each saved widget also has `when` ('always' | 'laptop' | 'phone'): it only shows while that device is connected.
  * cond is one of 'clear' | 'partly' | 'cloud' | 'rain' | 'thunder' | 'fog'. Temperatures are whole °C.
  *
  * BearWall.util:
@@ -98,7 +104,7 @@ const util = {
   setRing(ringEl, pct) {
     const thick = parseFloat(getComputedStyle(ringEl).getPropertyValue('--thick')) || 9;   // this widget's own look
     const r = 50 - thick / 2 - 1, arc = ringEl.querySelector('.arc');
-    ringEl.querySelectorAll('circle').forEach(c => c.setAttribute('r', r));
+    ringEl.querySelectorAll('.trk, .arc').forEach(c => c.setAttribute('r', r));   // only the ring, not content in its center
     if (!arc.style.strokeDashoffset) arc.getBoundingClientRect();   // first fill: start from empty so it sweeps
     arc.style.strokeDashoffset = 100 - clamp(pct, 0, 100);
   },
@@ -213,6 +219,12 @@ const P = { source: 'live', cond: 'partly', temp: 31, hum: 74, hour: 19.5 };   /
 let live = null, liveState = 'loading';   // loading | live | offline
 let sel = null;                           // selected widget id; none = View
 let corner = 0, shiftHeld = false;   // warp editing
+// Phase 2 preview: devices on the network (simulated switches for now) and active alerts
+const DEV = Object.assign({ laptop: false, phone: false, phoneSince: null, mic: false, cam: false }, store.get('devices', {}));
+const saveDevices = () => store.set('devices', DEV);
+const devicesNow = () => ({ laptop: !!DEV.laptop, phone: !!DEV.phone, phoneSince: DEV.phoneSince ? new Date(DEV.phoneSince) : null, mic: !!DEV.mic, cam: !!DEV.cam });
+const shownNow = w => !w.when || w.when === 'always' || !!DEV[w.when];
+let alerts = [];
 const inPanel = q => q.every(([x, y]) => x >= 0 && x <= WALL_W && y >= 0 && y <= WALL_H);
 const saveLayout = () => store.set('layout', L);
 const saveSettings = () => store.set('settings', S);
@@ -237,6 +249,7 @@ function normalize() {
     fitInside(w, WALL_W, WALL_H);
     w.mode = w.mode === 'rect' ? 'rect' : 'square';
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
+    w.when = ['laptop', 'phone'].includes(w.when) ? w.when : 'always';
     if (known(w)) w.opts = Object.assign(defaultOpts(types[w.type]), w.opts);   // unknown types are kept but not shown
     w.look = Object.assign({}, DEFAULT_LOOK, oldLook, w.look);   // older saves had one look for the whole wall
   }
@@ -364,7 +377,8 @@ function buildStage() {
 }
 
 function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
-  const ctx = { mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather };
+  const ctx = { mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather,
+    devices: devicesNow(), alerts };
   i.el.className = `wgt w-${i.w.type} ${i.w.mode} ${i.w.anchor}`;
   try {
     if (!i.mounted) { i.m.mount(i.el, ctx); i.mounted = true; }
@@ -376,6 +390,8 @@ function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
 function render() {
   const now = timeNow(), weather = weatherNow(now);
   inst.forEach(i => updateInst(i, now, weather));
+  // Show when: hidden in View, faint while arranging (see style.css)
+  inst.forEach(i => wallEl.querySelector(`.widget[data-wid="${i.w.id}"]`).classList.toggle('off', !shownNow(i.w)));
   renderGallery(now, weather);
   renderControls();
 }
@@ -474,7 +490,7 @@ function renderSel() {
   $('#widgetTools').hidden = !sel;
   renderLook(sel ? w : null);
   if (sel) {
-    onTabs('mode', w.mode); onTabs('wAnchor', w.anchor);
+    onTabs('mode', w.mode); onTabs('wAnchor', w.anchor); onTabs('wWhen', w.when);
     $('#anchorRow').hidden = w.mode !== 'rect';
     renderStyles(w);
     renderOpts(w);
@@ -519,7 +535,8 @@ function buildGallery() {
 function renderGallery(now = timeNow(), weather = weatherNow(now)) {
   $('#gallery').querySelectorAll('.gitem').forEach(b => {
     const m = types[b.dataset.type], el = b.querySelector('.wgt');
-    const ctx = { mode: 'square', anchor: 'right', opts: defaultOpts(m), look: DEFAULT_LOOK, now, motion: 'off', settings: S, city: S.city, weather };
+    const ctx = { mode: 'square', anchor: 'right', opts: defaultOpts(m), look: DEFAULT_LOOK, now, motion: 'off', settings: S, city: S.city, weather,
+      devices: { laptop: true, phone: false, phoneSince: null, mic: true, cam: false }, alerts: PREVIEW_ALERTS };
     el.className = `wgt w-${m.type} square right`;
     try { if (!el._mounted) { m.mount(el, ctx); el._mounted = true; } m.update(el, ctx); } catch (e) { console.error(`preview "${m.type}" failed:`, e); }
   });
@@ -593,7 +610,7 @@ function deleteSelected() {
 }
 function addWidget(type) {
   const m = types[type], [w0, h0] = m.size.square;
-  const w = { id: uid(), type, mode: 'square', anchor: 'right', x: snap((WALL_W - w0) / 2), y: snap((WALL_H - h0) / 2), w: w0, h: h0, opts: defaultOpts(m), look: copy(DEFAULT_LOOK) };
+  const w = { id: uid(), type, mode: 'square', anchor: 'right', when: m.when || 'always', x: snap((WALL_W - w0) / 2), y: snap((WALL_H - h0) / 2), w: w0, h: h0, opts: defaultOpts(m), look: copy(DEFAULT_LOOK) };
   fitInside(w, WALL_W, WALL_H);
   L.widgets.push(w); sel = w.id; saveLayout(); buildStage();
 }
@@ -722,6 +739,12 @@ function bindControls() {
     if (!b || !w) return;
     w.anchor = b.dataset.v; saveLayout(); render();
   };
+  $('#wWhen').onclick = e => {
+    const b = e.target.closest('button'), w = selW();
+    if (!b || !w) return;
+    w.when = b.dataset.v; saveLayout(); render();
+  };
+  bindDevices();
   $('#widgetOpts').addEventListener('click', e => { const b = e.target.closest('.tabs button'); if (b) setOpt(b.parentElement.dataset.k, b.dataset.v); });
   $('#widgetOpts').addEventListener('input', e => { const t = e.target; if (t.dataset.k) setOpt(t.dataset.k, t.type === 'checkbox' ? t.checked : t.value); });
   $('#reset').onclick = e => {   // two taps instead of confirm(), which embedded pages can't show
@@ -749,6 +772,97 @@ function bindControls() {
   if (document.fullscreenEnabled) $('#full').onclick = () => $('#wallWrap').requestFullscreen().catch(() => {});
   else $('#full').hidden = true;
   bindCitySearch();
+}
+
+/* ---------- alerts: things the system notices (real internet check + sample triggers for the rest) ---------- */
+const SAMPLE_ALERTS = {
+  'net-down': { kind: 'network', level: 'critical', title: 'Offline 3 min', detail: 'No internet (sample)', label: 'Offline' },
+  'net-device': { kind: 'network', level: 'info', title: 'New device on Wi-Fi', detail: 'Galaxy-A52 joined', label: 'New device' },
+  'proj-hot': { kind: 'projector', level: 'warning', title: 'Running hot · 78°C', detail: 'Projector chip temperature', label: 'Hot' },
+  'proj-storage': { kind: 'projector', level: 'warning', title: 'Storage 92% full', detail: 'Projector storage', label: 'Storage' },
+  'proj-power': { kind: 'projector', level: 'info', title: 'Power cut at 2:14 AM', detail: 'Back at 2:31 AM', label: 'Power cut' },
+  'proj-uptime': { kind: 'projector', level: 'info', title: 'Running 14 days', detail: 'A restart would help', label: 'Uptime' },
+  'sec-malware': { kind: 'security', level: 'critical', title: 'Proxy malware is back', detail: 'itvbox · prebuilt · port 9000 · daemon12138', label: 'Malware' },
+  'sec-adb': { kind: 'security', level: 'warning', title: 'New ADB connection', detail: 'Something connected to the debug port', label: 'ADB' }
+};
+const PREVIEW_ALERTS = [Object.assign({ id: 'preview', since: new Date() }, SAMPLE_ALERTS['net-device'])];
+function setAlert(id, a) {
+  const old = alerts.find(x => x.id === id);
+  if (old && old.level === a.level && old.title === a.title && old.detail === a.detail) return;
+  alerts = alerts.filter(x => x.id !== id).concat(Object.assign({ id, since: old ? old.since : new Date() }, a));
+  render();
+}
+function clearAlert(id) { if (alerts.some(x => x.id === id)) { alerts = alerts.filter(x => x.id !== id); render(); } }
+
+// Real internet check. A failed request only counts as "offline" once a request has worked here before, or when the
+// browser itself says it's offline, so a sandbox that blocks requests (like the artifact viewer) doesn't cry wolf.
+let netOk = false, netDownSince = null, netSlow = 0;
+async function checkNet() {
+  let ms = null;
+  if (navigator.onLine) {
+    const t0 = performance.now();
+    try { await fetch('https://www.google.com/generate_204', { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }); ms = Math.round(performance.now() - t0); } catch (e) {}
+  }
+  if (ms == null && (netOk || !navigator.onLine)) {
+    netDownSince = netDownSince || Date.now();
+    const mins = Math.max(1, Math.round((Date.now() - netDownSince) / 60000));
+    return setAlert('net', { kind: 'network', level: 'critical', title: `Offline ${mins} min`, detail: 'No internet' });
+  }
+  if (ms == null) return;
+  netOk = true; netDownSince = null;
+  netSlow = ms > 800 ? netSlow + 1 : 0;   // ponytail: 2 slow checks in a row = slow; a ping sweep on the projector replaces this in Phase 1
+  if (netSlow >= 2) setAlert('net', { kind: 'network', level: 'warning', title: `Slow · ${ms} ms`, detail: 'Internet is slow' });
+  else clearAlert('net');
+}
+
+/* ---------- update check: is there a newer BearWall on GitHub? ---------- */
+// Phase 1: "Update projector" makes the projector app download the new web files from GitHub. In the prototype
+// it just records the new version as installed and reloads.
+let upd = { state: 'checking' };
+async function checkUpdate() {
+  try {
+    const r = await fetch('https://api.github.com/repos/BruBread/BearWall/commits/main', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(), sha = j.sha, installed = store.get('installed', null);
+    if (!installed) store.set('installed', sha);   // the first check sets the baseline
+    if (!installed || installed === sha) { upd = { state: 'current', sha }; clearAlert('update'); }
+    else {
+      upd = { state: 'available', sha, msg: String(j.commit.message).split('\n')[0], date: new Date(j.commit.committer.date) };
+      setAlert('update', { kind: 'update', level: 'info', title: 'Update available', detail: `${sha.slice(0, 7)} · ${upd.msg}` });
+    }
+  } catch (e) { upd = { state: 'unknown' }; }
+  renderUpdate();
+}
+function renderUpdate() {
+  $('#updState').textContent = upd.state === 'checking' ? 'Checking for updates…'
+    : upd.state === 'current' ? `Up to date · ${upd.sha.slice(0, 7)}`
+    : upd.state === 'available' ? `Update available · ${upd.sha.slice(0, 7)}` : "Can't check for updates here.";
+  $('#updBtn').hidden = upd.state !== 'available';
+  $('#updNote').hidden = upd.state !== 'available';
+  if (upd.state === 'available') $('#updNote').textContent = `${upd.msg} · ${upd.date.toLocaleDateString([], { day: 'numeric', month: 'short' })}`;
+}
+
+/* ---------- Devices card (Phase 2 preview) ---------- */
+function bindDevices() {
+  for (const k of ['laptop', 'phone', 'mic', 'cam']) {
+    const c = $('#dev' + k[0].toUpperCase() + k.slice(1));
+    c.checked = !!DEV[k];
+    c.onchange = () => {
+      DEV[k] = c.checked;
+      if (k === 'phone') DEV.phoneSince = c.checked ? Date.now() : null;   // drives the "Welcome home" greeting
+      saveDevices(); render();
+    };
+  }
+  $('#alertTest').innerHTML = Object.entries(SAMPLE_ALERTS).map(([id, a]) => `<button class="btn quiet" data-id="${id}" title="${esc(a.title)}">${esc(a.label)}</button>`).join('');
+  $('#alertTest').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const id = b.dataset.id;
+    if (alerts.some(x => x.id === id)) clearAlert(id); else setAlert(id, SAMPLE_ALERTS[id]);
+    document.querySelectorAll('#alertTest button').forEach(x => x.classList.toggle('on', alerts.some(a => a.id === x.dataset.id)));
+  };
+  $('#updBtn').onclick = () => { if (upd.sha) { store.set('installed', upd.sha); location.reload(); } };
+  window.addEventListener('online', checkNet);
+  window.addEventListener('offline', checkNet);
 }
 
 /* ---------- city search (Open-Meteo geocoding, free, no key) ---------- */
@@ -828,6 +942,8 @@ window.BearWall = {
     buildStage();
     fetchWeather();
     setInterval(fetchWeather, 10 * 60 * 1000);
+    checkNet(); setInterval(checkNet, 30 * 1000);
+    checkUpdate(); setInterval(checkUpdate, 30 * 60 * 1000);
     setInterval(() => {   // widgets with `every` refresh on their own clock
       const t = Date.now(), due = inst.filter(i => i.m.every && t - i.last >= i.m.every - 100);
       if (!due.length) return;
@@ -835,6 +951,6 @@ window.BearWall = {
       due.forEach(i => updateInst(i, now, weather));
     }, 1000);
   },
-  _test: { homography, applyH, validQuad, inQuad, get layout() { return L; } }
+  _test: { homography, applyH, validQuad, inQuad, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };
 })();
