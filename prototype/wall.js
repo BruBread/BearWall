@@ -115,7 +115,12 @@ function sendLive() {
 }
 let remote = {};   // on the wall: what the control page has selected
 let introAt = 0, seenIntro = 0;   // Replay intro on the control page plays it on the wall too (sent with the live state)
-const playIntro = () => window.BearWallIntro && BearWallIntro.play(stage, S.motion);
+const playIntro = () => window.BearWallIntro && BearWallIntro.play(stage, S.motion, { corners: secCorners });
+// a section's 4 rendered corners in stage px (follows its warp), so the intro's power traces land on the real corner
+function secCorners(el) {
+  const s = sectionOf(el.dataset.sid), pw = stage.clientWidth, ph = stage.clientHeight;
+  return s ? rectPts(0, 0, s.w, s.h).map(p => localToPanel(s, p)).map(([x, y]) => [x * pw / WALL_W, y * ph / WALL_H]) : null;
+}
 function showRemote() {
   if (!WALL_ONLY) return;
   if (remote.intro && remote.intro !== seenIntro) {
