@@ -34,6 +34,7 @@ import java.util.concurrent.Future;
  */
 final class Lights {
     static final String TAG = "BearWallLights";
+    String lastError = "";   // the bulb loop logs each new failure reason once
     static final long MIN_GAP = 400;   // ms between bulb commands; faster and the bulb queues them up and freezes
     static final long PROBE = 10000;   // ms: while nothing changes, read the bulb (also catches changes from the Tuya app)
     static final long TICK = 5000;     // ms between schedule checks
@@ -264,7 +265,8 @@ final class Lights {
                     done = v;
                     setFound(true);
                 } catch (Exception e) {
-                    if (found) Log.w(TAG, "bulb not answering: " + e);
+                    String why = String.valueOf(e);
+                    if (!why.equals(lastError)) { Log.w(TAG, "bulb not answering: " + why); lastError = why; }   // once per new reason
                     if (bulb != null) bulb.close();
                     bulb = null; shown = null;
                     setFound(false);
