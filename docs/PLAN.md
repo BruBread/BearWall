@@ -24,26 +24,30 @@ This is the design for BearWall: what it does, the decisions behind it, and the 
 The prototype already uses the layout shape that `layout.json` will use:
 
 ```json
-{ "warp": [[64, 36], [1216, 36], [64, 684], [1216, 684]],
-  "widgets": [ { "id": "w1", "type": "weather", "mode": "square", "anchor": "right",
-                 "x": 64, "y": 120, "w": 264, "h": 264, "opts": {} } ] }
+{ "widgets": [ { "id": "w1", "type": "weather", "mode": "square", "anchor": "right",
+                 "x": 64, "y": 120, "w": 264, "h": 264, "opts": {},
+                 "quad": [[60, 110], [340, 130], [64, 390], [330, 380]] } ] }
 ```
 
-Widget coordinates are wall pixels. `warp` is `null` (the full panel) or the wall's 4 corners on the projector panel in panel pixels, in the order top-left, top-right, bottom-left, bottom-right.
+Coordinates are wall pixels. `quad` is optional. It holds the widget's 4 corners on the wall, in the order top-left, top-right, bottom-left, bottom-right. When it's set, the widget's flat `w` × `h` content is warped onto those corners.
 
 ## Warping onto a real wall
 
-The projector doesn't hit the wall square-on, so the whole picture gets **one 4-corner warp**. This works the same way as ProjectorRoot's keystone page:
-- **Moves:**
+The projector doesn't hit the wall square-on, so **each widget gets its own 4-corner warp**.
+- **Modes:**
+  - **View:** nothing selected, the clean wall.
+  - **Arrange:** click a widget to move it or resize it.
+  - **Warp:** hold Shift, or turn on the "Warp handles" switch on a phone.
+- **Moves while warping:** the same as ProjectorRoot's keystone page:
   - Drag a corner.
   - Drag an edge's square to stretch that side.
-  - Drag inside to move the picture.
+  - Drag inside to move the widget.
   - Scroll or pinch to zoom.
-- **Fine control:** nudge one corner by 1 or 10 px with the arrow keys or a D-pad.
-- **Tools:** undo, a projected alignment grid, Full panel, and Factory warp (the projector's 90% default).
-- **How it's drawn:** the wall lays out flat at panel size, and a CSS `matrix3d` homography maps it onto the 4 corners. The GPU does this natively, and Chrome 95 supports it. Widgets don't know about the warp. Dragging a widget undoes the warp with the reverse mapping, so drags still feel right on a bent wall.
-- **Limits:** corners stay on the panel, and folded or mirrored shapes are refused. One warp straightens one flat surface at any angle. A second wall or the ceiling in the picture would still look bent.
-- **No root needed:** the wall page applies the warp itself, so this replaces the earlier root-only plan to push `persist.sys.keystone.*` props. With the hardware keystone neutral, animation may also get cheaper, because SurfaceFlinger then has no keystone pass to redo every frame. Measure this in Phase 1.
+- **Fine control:** nudge one corner by 1 or 10 px with Shift + arrows or a D-pad. There's also Undo and Flatten.
+- **Arrange on a warped widget** moves its whole shape on the 8 px grid.
+- **How it's drawn:** the widget lays out flat at its own size, and a CSS `matrix3d` homography maps it onto its corners. The GPU does this natively, and Chrome 95 supports it. Widgets don't know they're warped.
+- **Limits:** corners stay on the wall, and folded or mirrored shapes are refused.
+- **No root needed:** the wall page applies the warps itself, so the hardware keystone can stay neutral. That may also make animation cheaper, because SurfaceFlinger then has no keystone pass to redo every frame. Measure this in Phase 1.
 
 ## Look
 

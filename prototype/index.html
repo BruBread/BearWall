@@ -40,36 +40,21 @@
   <div class="grid">
     <section class="glass">
       <h2>Layout</h2>
-      <div class="sub">View shows exactly what the projector shows. Arrange moves widgets around the wall. Warp bends the whole picture to fit your wall, like the keystone page.</div>
-      <div class="lbl"><span>Mode</span></div>
-      <div class="tabs" id="lmode"><button data-v="view">View</button><button data-v="arrange">Arrange</button><button data-v="warp">Warp</button></div>
+      <div class="sub">Click a widget to move it or drag its corners to resize it. Hold Shift to warp it to the wall's angle. Click empty wall to see it clean, exactly as the projector shows it.</div>
+      <div class="lbl"><span>Selected</span></div>
+      <div class="selname" id="selName">Nothing selected</div>
 
-      <div id="arrangeTools" hidden>
-        <div class="lbl"><span>Selected</span></div>
-        <div class="selname" id="selName">Nothing selected</div>
-        <div id="widgetTools" hidden>
-          <div class="lbl"><span>Shape</span></div>
-          <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
-          <div id="anchorRow">
-            <div class="lbl"><span>Hug corner</span></div>
-            <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
-          </div>
-          <div id="widgetOpts"></div>
+      <div id="widgetTools" hidden>
+        <div class="lbl"><span>Shape</span></div>
+        <div class="tabs" id="mode"><button data-v="square">Square</button><button data-v="rect">Rectangle</button></div>
+        <div id="anchorRow">
+          <div class="lbl"><span>Hug corner</span></div>
+          <div class="tabs" id="wAnchor"><button data-v="left">Left</button><button data-v="right">Right</button></div>
         </div>
-        <div class="lbl"><span>Add</span></div>
-        <div class="add">
-          <select class="field" id="addType" aria-label="Widget type"></select>
-          <button class="btn" id="addWidget">Add widget</button>
-        </div>
-        <div class="actions">
-          <button class="btn danger" id="del" disabled>Delete</button>
-          <button class="btn quiet" id="reset">Reset widgets</button>
-        </div>
-        <div class="note">Drag a widget to move it and drag its corners to resize it. Everything snaps to an 8 px grid on the 1280 × 720 wall. Arrow keys move the selection 8 px, Shift + arrows resize it, Delete removes it, Esc deselects.</div>
-      </div>
+        <div id="widgetOpts"></div>
 
-      <div id="warpTools" hidden>
-        <div class="lbl"><span>Corner</span><span class="readout" id="readout"></span></div>
+        <div class="lbl"><span>Warp</span><span class="readout" id="readout"></span></div>
+        <label class="row">Warp handles (same as holding Shift)<input type="checkbox" class="switch" id="warpSticky"></label>
         <div class="corners" id="corners">
           <button data-i="0"><span class="dot" style="background:var(--lt)"></span>Top left</button>
           <button data-i="1"><span class="dot" style="background:var(--rt)"></span>Top right</button>
@@ -89,12 +74,18 @@
         </div>
         <div class="actions">
           <button class="btn quiet" id="undo" disabled>Undo</button>
-          <button class="btn quiet" id="grid">Show grid</button>
-          <button class="btn quiet" id="fullPanel">Full panel</button>
-          <button class="btn quiet" id="factory">Factory warp</button>
+          <button class="btn quiet" id="flatten">Flatten</button>
+          <button class="btn danger" id="del">Delete widget</button>
         </div>
-        <div class="note">Drag a corner. Drag an edge's square to stretch that side. Drag inside to move the whole picture. Scroll or pinch to zoom. Keys: 1–4 pick a corner, arrows nudge (Shift ×10), Ctrl+Z undo, G grid.</div>
       </div>
+
+      <div class="lbl"><span>Add</span></div>
+      <div class="add">
+        <select class="field" id="addType" aria-label="Widget type"></select>
+        <button class="btn" id="addWidget">Add widget</button>
+      </div>
+      <div class="actions"><button class="btn quiet" id="reset">Reset widgets</button></div>
+      <div class="note">Arrows move the widget 8 px. Shift + arrows nudge the active corner, 1–4 pick it, Ctrl+Z undoes a warp. Delete removes the widget, Esc deselects. While warping: drag a corner, drag an edge's square to stretch that side, drag inside to move it, scroll or pinch to zoom.</div>
     </section>
 
     <section class="glass">

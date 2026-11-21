@@ -13,11 +13,12 @@ Planning is done and the interactive prototype works. Phase 1 (the real app on t
 Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need a build step or a server.
 
 - **The wall:** the black 16:9 box shows exactly what the projector would show. **Fullscreen** shows it the way it looks on the wall.
-- **Arrange:** drag widgets around the wall and drag their corners to resize them. Everything snaps to an 8 px grid on a 1280 × 720 wall. Arrow keys nudge the selection, Shift + arrows resize it, and Delete removes it.
-- **Warp:** the projector usually doesn't hit the wall square-on, so the whole picture gets one 4-corner warp, like the keystone page in [ProjectorRoot](https://github.com/BruBread/ProjectorRoot).
-  - Drag a corner, drag an edge's square to stretch that side, or drag inside to move the picture. Scroll or pinch to zoom.
-  - Nudge a corner with the arrow keys or the on-screen D-pad, in 1 px or 10 px steps.
-  - Undo, a projected alignment grid, Full panel, and Factory warp.
+- **Click a widget** to move it or drag its corners to resize it. Everything snaps to an 8 px grid on a 1280 × 720 wall. **Click empty wall** to see it clean, exactly as the projector shows it.
+- **Hold Shift** to warp the selected widget to the wall's angle. Each widget has its own 4 corners, and it uses the same moves as the keystone page in [ProjectorRoot](https://github.com/BruBread/ProjectorRoot):
+  - Drag a corner, drag an edge's square to stretch that side, or drag inside to move it. Scroll or pinch to zoom.
+  - Nudge a corner with Shift + arrows or the on-screen D-pad, in 1 px or 10 px steps.
+  - Undo and Flatten.
+  - On a phone, the "Warp handles" switch does what Shift does.
 - **Widgets:** weather, clock, date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
 - **Styling:** ring color and thickness, glow, icon colors, and four motion levels.

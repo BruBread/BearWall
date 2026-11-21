@@ -1,4 +1,4 @@
-/* BearWall wall runtime: one wall of widgets, bent by one 4-corner warp to fit the real wall; settings and shared data.
+/* BearWall wall runtime: one wall of widgets, each of which can be warped by its own 4 corners to fit the real wall; settings and shared data.
  * Widgets live in widgets/*.js, load after this file, and register themselves with BearWall.register().
  * Plain ES2020 for Chrome 95 (the projector's WebView). No build step, no dependencies.
  *
@@ -174,9 +174,9 @@ function validQuad(q) {
 /* ---------- state ---------- */
 const types = {};
 const known = w => !!types[w.type];
-// Widgets sit on one wall in wall px (1280x720). `warp` is null (full panel) or the wall's 4 corners on the
-// projector panel in panel px, ordered [top-left, top-right, bottom-left, bottom-right].
-const DEFAULT_LAYOUT = { warp: null, widgets: [
+// Widgets sit on one wall in wall px (1280x720). A widget may have a `quad`: its 4 corners on the wall,
+// ordered [top-left, top-right, bottom-left, bottom-right]; its flat w x h content is warped onto them.
+const DEFAULT_LAYOUT = { widgets: [
   { id: 'w1', type: 'weather', mode: 'square', anchor: 'right', x: 64, y: 120, w: 264, h: 264, opts: {} },
   { id: 'w3', type: 'clock', mode: 'square', anchor: 'right', x: 360, y: 120, w: 264, h: 264, opts: {} },
   { id: 'w4', type: 'hourly', mode: 'rect', anchor: 'left', x: 64, y: 424, w: 560, h: 112, opts: {} },
@@ -184,7 +184,6 @@ const DEFAULT_LAYOUT = { warp: null, widgets: [
   { id: 'w5', type: 'sky', mode: 'rect', anchor: 'right', x: 744, y: 152, w: 488, h: 104, opts: {} }
 ] };
 const FULL = rectPts(0, 0, WALL_W, WALL_H);
-const FACTORY = [[64, 36], [1216, 36], [64, 684], [1216, 684]];   // TXCZ's factory keystone: 90% of the panel
 const CORNERS = ['Top left', 'Top right', 'Bottom left', 'Bottom right'];
 const EDGES = [[0, 1], [1, 3], [3, 2], [2, 0]];                    // top, right, bottom, left
 const CITIES = [
@@ -202,9 +201,9 @@ const S = Object.assign(copy(DEFAULT_SETTINGS), savedSettings || {});
 if (!savedSettings && matchMedia('(prefers-reduced-motion: reduce)').matches) S.motion = 'calm';
 const P = { source: 'live', cond: 'partly', temp: 31, hum: 74, hour: 19.5 };   // sample values, not saved
 let live = null, liveState = 'loading';   // loading | live | offline
-let lmode = 'view';                       // view | arrange | warp
-let sel = null;                           // selected widget id (Arrange)
-let corner = 0, step = 1, grid = false;   // Warp
+let sel = null;                           // selected widget id; none = View
+let corner = 0, step = 1, shiftHeld = false;   // warp editing
+const inPanel = q => q.every(([x, y]) => x >= 0 && x <= WALL_W && y >= 0 && y <= WALL_H);
 const saveLayout = () => store.set('layout', L);
 const saveSettings = () => store.set('settings', S);
 const widgetOf = id => L.widgets.find(w => w.id === id);
@@ -213,14 +212,15 @@ const defaultOpts = m => Object.fromEntries((m.options || []).map(o => [o.key, o
 // Older saved layouts had several "screens"; fold their widgets onto the one wall at the same spots.
 function migrate(old) {
   if (!old || !Array.isArray(old.screens)) return old;
-  return { warp: null, widgets: old.screens.flatMap(s => (Array.isArray(s.widgets) ? s.widgets : [])
+  return { widgets: old.screens.flatMap(s => (Array.isArray(s.widgets) ? s.widgets : [])
     .map(w => Object.assign({}, w, { x: (+w.x || 0) + (+s.x || 0), y: (+w.y || 0) + (+s.y || 0) }))) };
 }
 function normalize() {
   L = migrate(L);
   if (!L || !Array.isArray(L.widgets)) L = copy(DEFAULT_LAYOUT);
-  if (L.warp && !validQuad(L.warp)) L.warp = null;
+  delete L.warp;   // the old whole-wall warp; widgets warp one by one now
   for (const w of L.widgets) {
+    if (w.quad && !(validQuad(w.quad) && inPanel(w.quad))) delete w.quad;
     for (const k of ['x', 'y', 'w', 'h']) if (!Number.isFinite(w[k])) w[k] = k === 'w' || k === 'h' ? 240 : 0;
     fitInside(w, WALL_W, WALL_H);
     w.mode = w.mode === 'rect' ? 'rect' : 'square';
@@ -283,44 +283,52 @@ async function fetchWeather() {
 }
 
 /* ---------- the wall ---------- */
+// View: nothing selected. Arrange: a widget selected (move, resize). Warp: Shift held or the Warp handles switch on.
 let stage, stageBox, wallEl, inst = [];
 const HANDLES = ['nw', 'ne', 'sw', 'se'].map(h => `<i class="handle" data-h="${h}"></i>`).join('');
-const GRID_MARKS = [0, 1, 2, 3].map(i => `<i class="gc gc${i}"></i>`).join('');
-const quadNow = () => L.warp || FULL;
+const selW = () => (sel && widgetOf(sel)) || null;
+const warpOn = () => !!selW() && (shiftHeld || $('#warpSticky').checked);
+const quadOf = w => w.quad || rectPts(w.x, w.y, w.w, w.h);
 
-function place(el, b, pw, ph) {
-  el.style.left = b.x / pw * 100 + '%'; el.style.top = b.y / ph * 100 + '%';
-  el.style.width = b.w / pw * 100 + '%'; el.style.height = b.h / ph * 100 + '%';
+function place(el, b) {
+  el.style.left = b.x / WALL_W * 100 + '%'; el.style.top = b.y / WALL_H * 100 + '%';
+  el.style.width = b.w / WALL_W * 100 + '%'; el.style.height = b.h / WALL_H * 100 + '%';
 }
+// A warped widget lays out flat at its own w x h, then a homography maps that rectangle onto its 4 corners.
 function positionWidget(w) {
   const el = wallEl.querySelector(`.widget[data-wid="${w.id}"]`);
-  place(el, w, WALL_W, WALL_H);
-  el.dataset.label = types[w.type].name + ' · ' + (w.mode === 'rect' ? 'rectangle' : 'square');
-}
-// The wall lays out flat at the panel's size, then one homography maps that rectangle onto the warp's 4 corners.
-function positionWall() {
-  const pw = stage.clientWidth, ph = stage.clientHeight;
-  Object.assign(wallEl.style, { width: pw + 'px', height: ph + 'px',
-    transform: L.warp ? matrix3d(homography(rectPts(0, 0, pw, ph), L.warp.map(([x, y]) => [x * pw / WALL_W, y * ph / WALL_H]))) : '' });
-  drawWarpUI();
+  if (!el) return;
+  el.classList.toggle('warped', !!w.quad);
+  if (w.quad) {
+    const kx = stage.clientWidth / WALL_W, ky = stage.clientHeight / WALL_H;
+    Object.assign(el.style, { left: 0, top: 0, width: w.w * kx + 'px', height: w.h * ky + 'px',
+      transform: matrix3d(homography(rectPts(0, 0, w.w * kx, w.h * ky), w.quad.map(([x, y]) => [x * kx, y * ky]))) });
+  } else {
+    el.style.transform = '';
+    place(el, w);
+  }
+  el.dataset.label = types[w.type].name + (w.quad ? ' · warped' : '');
 }
 function drawWarpUI() {
-  const ui = $('#warpui');
-  ui.hidden = lmode !== 'warp';
-  if (ui.hidden) return;
-  const q = quadNow(), pct = (x, y) => [x / WALL_W * 100 + '%', y / WALL_H * 100 + '%'];
+  const ui = $('#warpui'), w = selW(), on = warpOn();
+  ui.hidden = !on;
+  wallEl.querySelectorAll('.widget').forEach(el => el.classList.toggle('warping', on && el.dataset.wid === sel));
+  if (!w) return;
+  const q = quadOf(w), pct = (x, y) => [x / WALL_W * 100 + '%', y / WALL_H * 100 + '%'];
+  $('#readout').textContent = `${CORNERS[corner]} · ${q[corner].map(Math.round).join(', ')}`;
+  document.querySelectorAll('#corners button').forEach(b => b.classList.toggle('on', +b.dataset.i === corner));
+  $('#undo').disabled = !undo.length;
+  $('#flatten').disabled = !w.quad;
+  if (!on) return;
   ui.querySelector('polygon').setAttribute('points', [0, 1, 3, 2].map(i => q[i].join(',')).join(' '));
   ui.querySelectorAll('.ch').forEach(h => { const i = +h.dataset.i; [h.style.left, h.style.top] = pct(...q[i]); h.classList.toggle('on', i === corner); });
   ui.querySelectorAll('.eh').forEach(h => { const [a, b] = EDGES[+h.dataset.e]; [h.style.left, h.style.top] = pct((q[a][0] + q[b][0]) / 2, (q[a][1] + q[b][1]) / 2); });
-  $('#readout').textContent = `${CORNERS[corner]} · ${q[corner].join(', ')}`;
-  document.querySelectorAll('#corners button').forEach(b => b.classList.toggle('on', +b.dataset.i === corner));
-  $('#undo').disabled = !undo.length;
 }
 
 function buildStage() {
   inst.forEach(i => i.ro.disconnect());
   const shown = L.widgets.filter(known);
-  wallEl.innerHTML = shown.map(w => `<div class="widget frame" data-wid="${esc(w.id)}"><div class="wgt"></div>${HANDLES}</div>`).join('') + GRID_MARKS;
+  wallEl.innerHTML = shown.map(w => `<div class="widget frame" data-wid="${esc(w.id)}"><div class="wgt"></div>${HANDLES}</div>`).join('');
   inst = shown.map(w => {
     const el = wallEl.querySelector(`.widget[data-wid="${w.id}"] > .wgt`);
     const i = { w, m: types[w.type], el, last: 0, mounted: false };
@@ -332,7 +340,6 @@ function buildStage() {
     return i;
   });
   shown.forEach(positionWidget);
-  positionWall();
   render();
 }
 
@@ -348,56 +355,73 @@ function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
 
 function render() {
   const root = document.documentElement.style, now = timeNow(), weather = weatherNow(now);
-  stage.className = `stage m-${S.motion}` + (lmode === 'arrange' ? ' edit' : lmode === 'warp' ? ' warping' : '');
-  stageBox.classList.toggle('editing', lmode !== 'view');
   stage.dataset.icons = S.icons;
-  wallEl.classList.toggle('grid', grid);
   root.setProperty('--ring', S.ring); root.setProperty('--thick', S.thick); root.setProperty('--track', S.track); root.setProperty('--glow', S.glow);
   inst.forEach(i => updateInst(i, now, weather));
   renderControls();
 }
+// everything that depends on the selection, without re-rendering the widgets
+function renderChrome() {
+  stage.className = `stage m-${S.motion}` + (selW() ? ' sel-on' : '');
+  stageBox.classList.toggle('editing', !!selW());
+  renderSel();
+  drawWarpUI();
+}
 
-/* ---------- warp editing (same moves as the keystone page) ---------- */
-let undo = [], lastPush = 0, lastKind = null;
-// Drags push one undo step each; a run of nudges (or of scrolls) within 700 ms shares one.
-function pushUndo(kind) {
-  const t = Date.now(), grouped = kind && kind === lastKind && t - lastPush < 700;
-  lastPush = t; lastKind = kind || null;
+/* ---------- warp editing (same moves as the keystone page, on the selected widget) ---------- */
+let undo = [], lastPush = 0, lastKind = null, lastId = null;
+// Each drag is one undo step; a run of nudges (or of scrolls) on one widget within 700 ms shares one.
+function pushUndo(kind, w) {
+  const t = Date.now(), grouped = kind && kind === lastKind && w.id === lastId && t - lastPush < 700;
+  lastPush = t; lastKind = kind || null; lastId = w.id;
   if (grouped) return;
-  undo.push(L.warp ? copy(L.warp) : null);
+  undo.push({ id: w.id, quad: w.quad ? copy(w.quad) : null });
   if (undo.length > 50) undo.shift();
 }
-function doUndo() { if (!undo.length) return; L.warp = undo.pop(); saveLayout(); positionWall(); }
+function doUndo() {
+  const u = undo.pop(), w = u && widgetOf(u.id);
+  if (!w) return drawWarpUI();
+  if (u.quad) w.quad = u.quad; else delete w.quad;
+  positionWidget(w); saveLayout(); drawWarpUI();
+}
 const clampPt = ([x, y]) => [clamp(Math.round(x), 0, WALL_W), clamp(Math.round(y), 0, WALL_H)];
-const inPanel = q => q.every(([x, y]) => x >= 0 && x <= WALL_W && y >= 0 && y <= WALL_H);
-// Accept a new warp only if it stays on the panel and isn't folded or mirrored.
-function setWarp(q) {
+// Accept a new shape only if it stays on the wall and isn't folded or mirrored.
+function setQuad(w, q) {
   q = q.map(p => p.map(Math.round));
   if (!validQuad(q) || !inPanel(q)) return false;
-  L.warp = q; positionWall();
+  w.quad = q; positionWidget(w); drawWarpUI();
   return true;
 }
-function moveAll(q0, dx, dy) {
+function moveAll(w, q0, dx, dy) {
   const xs = q0.map(p => p[0]), ys = q0.map(p => p[1]);
   dx = clamp(dx, -Math.min(...xs), WALL_W - Math.max(...xs)); dy = clamp(dy, -Math.min(...ys), WALL_H - Math.max(...ys));
-  return setWarp(q0.map(([x, y]) => [x + dx, y + dy]));
+  return setQuad(w, q0.map(([x, y]) => [x + dx, y + dy]));
 }
-function zoom(q0, f) {
+function zoom(w, q0, f) {
   const cx = q0.reduce((a, p) => a + p[0], 0) / 4, cy = q0.reduce((a, p) => a + p[1], 0) / 4;
-  return setWarp(q0.map(([x, y]) => [cx + (x - cx) * f, cy + (y - cy) * f]));
+  return setQuad(w, q0.map(([x, y]) => [cx + (x - cx) * f, cy + (y - cy) * f]));
 }
 function nudge(dx, dy) {
-  pushUndo('nudge');
-  const q = copy(quadNow());
+  const w = selW();
+  if (!w) return;
+  pushUndo('nudge', w);
+  const q = copy(quadOf(w));
   q[corner] = clampPt([q[corner][0] + dx, q[corner][1] + dy]);
-  setWarp(q); saveLayout();
+  setQuad(w, q); saveLayout();
+}
+function flatten(w) {   // back to a plain box where the warp's top-left was
+  if (!w || !w.quad) return;
+  pushUndo(null, w);
+  w.x = clamp(snap(Math.min(...w.quad.map(p => p[0]))), 0, WALL_W - w.w);
+  w.y = clamp(snap(Math.min(...w.quad.map(p => p[1]))), 0, WALL_H - w.h);
+  delete w.quad;
+  positionWidget(w); saveLayout(); drawWarpUI();
 }
 // point inside the convex quad (walk it clockwise: every edge keeps the point on its right)
 function inQuad(q, [x, y]) {
   const P = [q[0], q[1], q[3], q[2]];
   return P.every((a, i) => { const b = P[(i + 1) % 4]; return (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]) >= 0; });
 }
-function toggleGrid() { grid = !grid; render(); }
 
 /* ---------- controls ---------- */
 const RINGS = ['#5ee6ff', '#7dffa8', '#ffd84d', '#ff7ac6', '#ffffff'];
@@ -420,24 +444,18 @@ function renderControls() {
   $('#thickVal').textContent = S.thick; $('#trackVal').textContent = Math.round(S.track * 200) + '%'; $('#glowVal').textContent = Math.round(S.glow * 100) + '%';
   document.querySelectorAll('#conds .chip').forEach(b => b.classList.toggle('on', b.dataset.v === P.cond));
   document.querySelectorAll('#swatches .sw').forEach(b => b.classList.toggle('on', b.dataset.v === S.ring));
-  onTabs('source', P.source); onTabs('motion', S.motion); onTabs('icons', S.icons);
-  onTabs('lmode', lmode); onTabs('step', String(step));
-  $('#arrangeTools').hidden = lmode !== 'arrange';
-  $('#warpTools').hidden = lmode !== 'warp';
-  $('#grid').textContent = grid ? 'Hide grid' : 'Show grid';
+  onTabs('source', P.source); onTabs('motion', S.motion); onTabs('icons', S.icons); onTabs('step', String(step));
   $('#motionNote').textContent = NOTES[S.motion];
-  renderSel();
-  drawWarpUI();
+  renderChrome();
 }
 
 function renderSel() {
   wallEl.querySelectorAll('.widget.sel').forEach(f => f.classList.remove('sel'));
-  const w = sel && widgetOf(sel);
+  const w = selW();
   if (!w || !known(w)) sel = null;
   if (sel) wallEl.querySelector(`.widget[data-wid="${w.id}"]`).classList.add('sel');
-  $('#selName').textContent = sel ? types[w.type].name : 'Nothing selected · tap a widget on the wall';
+  $('#selName').textContent = sel ? types[w.type].name + (w.quad ? ' · warped' : '') : 'Nothing selected · click a widget on the wall';
   $('#widgetTools').hidden = !sel;
-  $('#del').disabled = !sel;
   if (sel) {
     onTabs('mode', w.mode); onTabs('wAnchor', w.anchor);
     $('#anchorRow').hidden = w.mode !== 'rect';
@@ -465,7 +483,7 @@ function renderOpts(w) {
   }
 }
 function setOpt(key, value) {
-  const w = sel && widgetOf(sel);
+  const w = selW();
   if (!w) return;
   w.opts[key] = value; saveLayout();
   const i = inst.find(x => x.w === w);
@@ -473,11 +491,8 @@ function setOpt(key, value) {
   renderOpts(w);
 }
 
-function select(id) { sel = id; renderSel(); }
-function setMode(m) { lmode = m; if (m !== 'arrange') sel = null; render(); }
-// pointer -> panel px; panel px -> flat wall px (undoes the warp so drags feel right on a bent wall)
+function select(id) { if (id !== sel) corner = 0; sel = id; renderChrome(); }
 const panelPt = e => { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) * WALL_W / r.width, (e.clientY - r.top) * WALL_H / r.height]; };
-const toWall = p => L.warp ? applyH(homography(L.warp, FULL), p[0], p[1]) : p;
 
 function deleteSelected() {
   if (!sel) return;
@@ -488,37 +503,44 @@ function addWidget(type) {
   const m = types[type], [w0, h0] = m.size.square;
   const w = { id: uid(), type, mode: 'square', anchor: 'right', x: snap((WALL_W - w0) / 2), y: snap((WALL_H - h0) / 2), w: w0, h: h0, opts: defaultOpts(m) };
   fitInside(w, WALL_W, WALL_H);
-  L.widgets.push(w); sel = w.id; lmode = 'arrange'; saveLayout(); buildStage();
+  L.widgets.push(w); sel = w.id; saveLayout(); buildStage();
+}
+// move a widget, flat or warped; arrange moves snap to the 8 px grid
+function moveWidget(w, start, dx, dy) {
+  if (start.quad) return moveAll(w, start.quad, snap(dx), snap(dy));
+  moveResize(w, start, dx, dy, '', WALL_W, WALL_H); positionWidget(w);
 }
 
 let drag = null, pinch = null;
 const pointers = new Map();
 function bindStage() {
   stageBox.addEventListener('pointerdown', e => {
-    if (lmode === 'view' || e.button > 0) return;
-    const p = panelPt(e);
-    if (lmode === 'warp') {
+    if (e.button > 0) return;
+    const p = panelPt(e), w = selW();
+    if (w && warpOn()) {   // Warp: corners, edges, inside; two fingers zoom
       pointers.set(e.pointerId, p);
-      stageBox.setPointerCapture(e.pointerId);
-      e.preventDefault();
-      if (pointers.size === 2) {   // pinch to zoom
+      if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
-        pinch = { q0: copy(quadNow()), d0: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1 }; drag = null; pushUndo();
+        pinch = { w, q0: copy(quadOf(w)), d0: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1 }; drag = null; pushUndo(null, w);
+        stageBox.setPointerCapture(e.pointerId); e.preventDefault();
         return;
       }
-      const q0 = copy(quadNow()), ch = e.target.closest('.ch'), eh = e.target.closest('.eh');
-      if (ch) { corner = +ch.dataset.i; drag = { kind: 'corner', q0, p0: p }; }
-      else if (eh) drag = { kind: 'edge', e: +eh.dataset.e, q0, p0: p };
-      else if (inQuad(q0, p)) drag = { kind: 'all', q0, p0: p };
-      else return;
-      pushUndo(); drawWarpUI();
-      return;
+      const q0 = copy(quadOf(w)), ch = e.target.closest('.ch'), eh = e.target.closest('.eh');
+      const kind = ch ? 'corner' : eh ? 'edge' : inQuad(q0, p) ? 'all' : null;
+      if (kind) {
+        if (ch) corner = +ch.dataset.i;
+        drag = { kind, w, edge: eh ? +eh.dataset.e : 0, q0, p0: p };   // keeps going if Shift is let go mid-drag
+        pushUndo(null, w); stageBox.setPointerCapture(e.pointerId); e.preventDefault(); drawWarpUI();
+        return;
+      }
+      pointers.delete(e.pointerId);
     }
     const f = e.target.closest('.widget');
-    if (!f) { select(null); return; }
+    if (!f) { select(null); return; }   // empty wall: View
     select(f.dataset.wid);
-    const w = widgetOf(sel), h = e.target.closest('.handle');
-    drag = { kind: 'widget', w, start: copy(w), p0: toWall(p), dir: h ? h.dataset.h : '' };
+    const t = selW(), h = e.target.closest('.handle');
+    if (t.quad) pushUndo(null, t);
+    drag = { kind: h && !t.quad ? 'resize' : 'move', w: t, start: copy(t), p0: p, dir: h ? h.dataset.h : '' };
     stageBox.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
@@ -527,92 +549,87 @@ function bindStage() {
     if (pinch && pointers.has(e.pointerId)) {
       pointers.set(e.pointerId, p);
       const [a, b] = [...pointers.values()];
-      zoom(pinch.q0, Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d0);
+      zoom(pinch.w, pinch.q0, Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d0);
       return;
     }
     if (!drag) return;
-    if (drag.kind === 'widget') {
-      const l = toWall(p);
-      moveResize(drag.w, drag.start, l[0] - drag.p0[0], l[1] - drag.p0[1], drag.dir, WALL_W, WALL_H);
-      positionWidget(drag.w);
-      return;
-    }
-    const dx = p[0] - drag.p0[0], dy = p[1] - drag.p0[1], q = copy(drag.q0);
-    if (drag.kind === 'corner') q[corner] = clampPt([q[corner][0] + dx, q[corner][1] + dy]);
-    else if (drag.kind === 'edge') EDGES[drag.e].forEach(i => { q[i] = clampPt([q[i][0] + dx, q[i][1] + dy]); });
-    else return moveAll(drag.q0, dx, dy);
-    setWarp(q);
+    const dx = p[0] - drag.p0[0], dy = p[1] - drag.p0[1];
+    if (drag.kind === 'move') return moveWidget(drag.w, drag.start, dx, dy);
+    if (drag.kind === 'resize') { moveResize(drag.w, drag.start, dx, dy, drag.dir, WALL_W, WALL_H); return positionWidget(drag.w); }
+    if (drag.kind === 'all') return moveAll(drag.w, drag.q0, dx, dy);
+    const q = copy(drag.q0);
+    const idx = drag.kind === 'corner' ? [corner] : EDGES[drag.edge];
+    idx.forEach(i => { q[i] = clampPt([q[i][0] + dx, q[i][1] + dy]); });
+    setQuad(drag.w, q);
   });
   const end = e => {
     pointers.delete(e.pointerId);
+    if (drag || pinch) saveLayout();
     if (pointers.size < 2) pinch = null;
-    if (drag || lmode === 'warp') saveLayout();
     drag = null;
     drawWarpUI();
   };
   stageBox.addEventListener('pointerup', end);
   stageBox.addEventListener('pointercancel', end);
   stageBox.addEventListener('wheel', e => {
-    if (lmode !== 'warp') return;
+    const w = selW();
+    if (!w || !warpOn()) return;
     e.preventDefault();
-    pushUndo('wheel'); zoom(copy(quadNow()), Math.exp(-e.deltaY * 0.0015)); saveLayout();
+    pushUndo('wheel', w); zoom(w, copy(quadOf(w)), Math.exp(-e.deltaY * 0.0015)); saveLayout();
   }, { passive: false });
-  new ResizeObserver(positionWall).observe(stage);   // the warp is applied in px
+  new ResizeObserver(() => L.widgets.forEach(w => w.quad && known(w) && positionWidget(w))).observe(stage);   // warps are in px
 }
 
 function bindControls() {
+  const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
+  const setShift = on => { if (shiftHeld !== on) { shiftHeld = on; drawWarpUI(); } };
+  document.addEventListener('keyup', e => { if (e.key === 'Shift') setShift(false); });
+  window.addEventListener('blur', () => setShift(false));
   document.addEventListener('keydown', e => {
-    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
-    const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-    if (lmode === 'warp') {
-      if (e.key >= '1' && e.key <= '4') { corner = +e.key - 1; drawWarpUI(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); return; }
-      if (e.key.toLowerCase() === 'g') { toggleGrid(); return; }
-      if (D) { e.preventDefault(); const s = step * (e.shiftKey ? 10 : 1); nudge(D[0] * s, D[1] * s); }
-      return;
-    }
-    if (lmode !== 'arrange') return;
-    if (e.key.toLowerCase() === 'g') { toggleGrid(); return; }
-    if (!sel) return;
+    if (typing()) return;
+    if (e.key === 'Shift') { setShift(true); return; }
+    const w = selW();
+    if (!w) return;
     if (e.key === 'Escape') { select(null); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+    if (warpOn() && /^Digit[1-4]$/.test(e.code)) { corner = +e.code.slice(5) - 1; drawWarpUI(); return; }
+    const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
     if (!D) return;
     e.preventDefault();
-    const w = widgetOf(sel);
-    moveResize(w, Object.assign({}, w), D[0] * GRID, D[1] * GRID, e.shiftKey ? 'se' : '', WALL_W, WALL_H);
-    positionWidget(w); saveLayout();
+    if (warpOn()) return nudge(D[0] * step, D[1] * step);
+    if (w.quad) pushUndo('move', w);
+    moveWidget(w, copy(w), D[0] * GRID, D[1] * GRID); saveLayout();
   });
 
-  $('#lmode').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); };
   // warp tools
+  $('#warpSticky').onchange = drawWarpUI;
   $('#corners').onclick = e => { const b = e.target.closest('button'); if (b) { corner = +b.dataset.i; drawWarpUI(); } };
   $('#dpad').onclick = e => { const b = e.target.closest('button'); if (!b) return; const [dx, dy] = b.dataset.nudge.split(',').map(Number); nudge(dx * step, dy * step); };
-  $('#step').onclick = e => { const b = e.target.closest('button'); if (b) { step = +b.dataset.v; renderControls(); } };
+  $('#step').onclick = e => { const b = e.target.closest('button'); if (b) { step = +b.dataset.v; onTabs('step', String(step)); } };
   $('#undo').onclick = doUndo;
-  $('#grid').onclick = toggleGrid;
-  $('#fullPanel').onclick = () => { pushUndo(); L.warp = null; saveLayout(); positionWall(); };
-  $('#factory').onclick = () => { pushUndo(); setWarp(FACTORY); saveLayout(); };
-  // arrange tools
+  $('#flatten').onclick = () => flatten(selW());
+  // widget tools
   $('#del').onclick = deleteSelected;
   $('#addType').innerHTML = Object.values(types).map(m => `<option value="${esc(m.type)}">${esc(m.name)}</option>`).join('');
   $('#addWidget').onclick = () => { const t = $('#addType').value; if (types[t]) addWidget(t); };
   $('#mode').onclick = e => {
-    const b = e.target.closest('button'), w = sel && widgetOf(sel);
+    const b = e.target.closest('button'), w = selW();
     if (!b || !w || w.mode === b.dataset.v) return;
     [w.w, w.h] = types[w.type].size[b.dataset.v]; w.mode = b.dataset.v;
     fitInside(w, WALL_W, WALL_H); positionWidget(w); saveLayout(); render();
   };
   $('#wAnchor').onclick = e => {
-    const b = e.target.closest('button'), w = sel && widgetOf(sel);
+    const b = e.target.closest('button'), w = selW();
     if (!b || !w) return;
     w.anchor = b.dataset.v; saveLayout(); render();
   };
   $('#widgetOpts').addEventListener('click', e => { const b = e.target.closest('.tabs button'); if (b) setOpt(b.parentElement.dataset.k, b.dataset.v); });
   $('#widgetOpts').addEventListener('input', e => { const t = e.target; if (t.dataset.k) setOpt(t.dataset.k, t.type === 'checkbox' ? t.checked : t.value); });
-  $('#reset').onclick = e => {   // two taps instead of confirm(), which embedded pages can't show; keeps the warp
+  $('#reset').onclick = e => {   // two taps instead of confirm(), which embedded pages can't show
     const b = e.currentTarget, disarm = () => { delete b.dataset.armed; b.textContent = 'Reset widgets'; };
     clearTimeout(b._t);
-    if (b.dataset.armed) { disarm(); L.widgets = copy(DEFAULT_LAYOUT.widgets); normalize(); sel = null; saveLayout(); buildStage(); return; }
+    if (b.dataset.armed) { disarm(); L.widgets = copy(DEFAULT_LAYOUT.widgets); normalize(); sel = null; undo = []; saveLayout(); buildStage(); return; }
     b.dataset.armed = '1'; b.textContent = 'Tap again to reset';
     b._t = setTimeout(disarm, 3000);
   };
@@ -694,7 +711,7 @@ function selfTest() {
   ok(validQuad(quad) && !validQuad([[0, 0], [100, 0], [100, 100], [0, 100]]) && !validQuad([[0, 0], [0, 0], [0, 9], [9, 9]]), 'folded or collapsed warps are refused');
   ok(inQuad(quad, [400, 300]) && !inQuad(quad, [20, 20]), 'inside-the-picture test');
   const m = migrate({ screens: [{ x: 100, y: 50, widgets: [{ id: 'a', x: 8, y: 16 }] }] });
-  ok(m.warp === null && m.widgets[0].x === 108 && m.widgets[0].y === 66, 'old screen layouts fold onto one wall', m);
+  ok(!m.warp && m.widgets[0].x === 108 && m.widgets[0].y === 66, 'old screen layouts fold onto one wall', m);
 }
 
 /* ---------- public API ---------- */
