@@ -15,6 +15,7 @@
   </header>
 
   <div class="top">
+    <div class="col">
     <section class="glass side" aria-label="Motion for all widgets">
       <h2>Motion</h2>
       <div class="sub">Applies to every widget.</div>
@@ -22,6 +23,13 @@
       <div class="tabs" id="motion"><button data-v="full">Full</button><button data-v="lite">Lite</button><button data-v="calm">Calm</button><button data-v="off">Off</button></div>
       <div class="note" id="motionNote"></div>
     </section>
+    <section class="glass side" aria-label="Add a widget">
+      <h2>Add a widget</h2>
+      <div class="sub">Click one to put it in the middle of the wall.</div>
+      <div class="gallery" id="gallery"></div>
+      <div class="actions"><button class="btn quiet" id="reset">Reset widgets</button></div>
+    </section>
+    </div>
     <section class="glass stage-card">
       <div class="stage-head">
         <div>
@@ -44,6 +52,7 @@
         </div>
       </div>
     </section>
+    <div class="col">
     <section class="glass side" aria-label="Warp">
       <h2>Warp</h2>
       <div class="sub" id="warpState">Select a widget on the wall, then hold Shift to warp it.</div>
@@ -55,6 +64,28 @@
       </div>
       <div class="note">Hold <b>Shift</b> on a selected widget, then drag a corner, drag an edge's square to stretch that side, drag inside to move it, or scroll to zoom. Shift + arrows nudge the active corner 1 px, 1–4 pick it.</div>
     </section>
+    <section class="glass side" aria-label="Look">
+      <h2>Look</h2>
+      <div class="sub" id="lookState">Select a widget to change its look.</div>
+      <div id="lookTools" hidden>
+        <div class="lbl"><span>Ring</span></div>
+        <div class="colorrow" data-look="ring"></div>
+        <div class="lbl"><span>Text</span></div>
+        <div class="colorrow" data-look="text"></div>
+        <div class="lbl"><span>Secondary text</span></div>
+        <div class="colorrow" data-look="dim"></div>
+        <div class="lbl"><span>Ring thickness</span><span id="wThickVal"></span></div>
+        <input type="range" id="wThick" min="4" max="16" step="1" aria-label="Ring thickness">
+        <div class="lbl"><span>Track brightness</span><span id="wTrackVal"></span></div>
+        <input type="range" id="wTrack" min="0" max=".5" step=".02" aria-label="Track brightness">
+        <div class="lbl"><span>Glow</span><span id="wGlowVal"></span></div>
+        <input type="range" id="wGlow" min="0" max="1" step=".05" aria-label="Glow">
+        <div class="lbl"><span>Icon colors</span></div>
+        <div class="tabs" id="wIcons"><button data-v="natural">Natural</button><button data-v="white">White</button><button data-v="ring">Ring</button><button data-v="custom">Custom</button></div>
+        <div class="colorrow" data-look="icon" id="iconRow"></div>
+      </div>
+    </section>
+    </div>
   </div>
 
   <div class="grid">
@@ -73,25 +104,10 @@
         </div>
         <div id="widgetOpts"></div>
 
-        <div class="lbl"><span>Look</span></div>
-        <div class="swatches" id="wSwatches"></div>
-        <div class="lbl"><span>Ring thickness</span><span id="wThickVal"></span></div>
-        <input type="range" id="wThick" min="4" max="16" step="1" aria-label="Ring thickness">
-        <div class="lbl"><span>Track brightness</span><span id="wTrackVal"></span></div>
-        <input type="range" id="wTrack" min="0" max=".5" step=".02" aria-label="Track brightness">
-        <div class="lbl"><span>Glow</span><span id="wGlowVal"></span></div>
-        <input type="range" id="wGlow" min="0" max="1" step=".05" aria-label="Glow">
-        <div class="lbl"><span>Icon colors</span></div>
-        <div class="tabs" id="wIcons"><button data-v="natural">Natural</button><button data-v="white">White</button><button data-v="ring">Ring color</button></div>
-        <div class="lbl"><span>Change to</span></div>
-        <select class="field" id="changeTo" aria-label="Change this widget to another type"></select>
         <div class="actions"><button class="btn danger" id="del">Delete widget</button></div>
       </div>
 
-      <div class="lbl"><span>Add a widget</span></div>
-      <div class="gallery" id="gallery"></div>
-      <div class="actions"><button class="btn quiet" id="reset">Reset widgets</button></div>
-      <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Warping is in the Warp card.</div>
+      <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Its colors are in the Look card, warping in the Warp card.</div>
     </section>
 
     <section class="glass">

@@ -42,6 +42,15 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 @media (max-width: 1199px) { .top { grid-template-columns: 1fr 1fr; } .top .stage-card { grid-column: 1 / -1; order: -1; } }
 @media (max-width: 640px) { .top { grid-template-columns: 1fr; } }
 .side .tabs { display: grid; grid-template-columns: 1fr 1fr; border-radius: 22px; }
+.top > .col { display: grid; gap: 18px; align-content: start; min-width: 0; }
+.side .gallery { grid-template-columns: 1fr 1fr; }
+.colorrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.colorrow .sw { width: 24px; height: 24px; border-width: 2px; }
+.cpick { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; flex: none; }
+.cpick::-webkit-color-swatch-wrapper { padding: 0; }
+.cpick::-webkit-color-swatch { border: 2px solid #fff; border-radius: 50%; }
+.cpick::-moz-color-swatch { border: 2px solid #fff; border-radius: 50%; }
+.cpick:focus-visible { outline: 3px solid #fff8; outline-offset: 2px; }
 .actions.col { flex-direction: column; }
 .actions.col .btn { width: 100%; }
 .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -96,6 +105,7 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 :root { --i-sun: #ffd84d; --i-moon: #fff1b8; --i-cloud: #eef3fb; --i-rain: #5ec8ff; --i-bolt: #ffd84d; --i-fog: #b9c6d8; }
 [data-icons=white] { --i-sun: var(--w-text); --i-moon: var(--w-text); --i-cloud: var(--w-text); --i-rain: var(--w-text); --i-bolt: var(--w-text); --i-fog: var(--w-text); }
 [data-icons=ring] { --i-sun: var(--ring); --i-moon: var(--ring); --i-cloud: var(--ring); --i-rain: var(--ring); --i-bolt: var(--ring); --i-fog: var(--ring); }
+[data-icons=custom] { --i-sun: var(--i-custom); --i-moon: var(--i-custom); --i-cloud: var(--i-custom); --i-rain: var(--i-custom); --i-bolt: var(--i-custom); --i-fog: var(--i-custom); }
 .c-sun { stroke: var(--i-sun); } .c-moon { stroke: var(--i-moon); } .c-cloud { stroke: var(--i-cloud); }
 .c-rain { stroke: var(--i-rain); } .c-bolt { stroke: var(--i-bolt); } .c-fog { stroke: var(--i-fog); }
 /* the ring: one fixed color, Apple Activity style, starts at 12 o'clock */

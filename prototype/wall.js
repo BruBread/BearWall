@@ -197,8 +197,10 @@ const CITIES = [
   ['Tokyo', 'Tokyo, JP', 35.68, 139.69], ['Singapore', 'SG', 1.29, 103.85],
   ['London', 'England, GB', 51.51, -0.13], ['New York', 'New York, US', 40.71, -74.01]
 ].map(([name, admin, lat, lon]) => ({ name, admin, lat, lon }));
-const LOOK_KEYS = ['ring', 'thick', 'track', 'glow', 'icons'];
-const DEFAULT_LOOK = { ring: '#5ee6ff', thick: 9, track: .18, glow: .5, icons: 'natural' };
+const LOOK_KEYS = ['ring', 'text', 'dim', 'icon', 'thick', 'track', 'glow', 'icons'];
+// icons: 'natural' | 'white' | 'ring' | 'custom' (custom uses the `icon` color)
+const DEFAULT_LOOK = { ring: '#5ee6ff', text: '#f4f7ff', dim: '#a6a6a6', icon: '#ffd84d', thick: 9, track: .18, glow: .5, icons: 'natural' };
+const COLOR_PRESETS = ['#5ee6ff', '#7dffa8', '#ffd84d', '#ff7ac6', '#b18cff', '#ffa24d', '#ff5e5e', '#5b8cff', '#ffffff', '#a6a6a6'];
 const DEFAULT_SETTINGS = { city: CITIES[0], name: '', motion: 'full' };
 
 let L = store.get('layout', null);
@@ -319,8 +321,9 @@ function positionWidget(w) {
   el.dataset.label = types[w.type].name + (w.quad ? ' · warped' : '');
   applyLook(w, el);
 }
+const LOOK_VARS = { ring: '--ring', text: '--w-text', dim: '--w-dim', icon: '--i-custom', thick: '--thick', track: '--track', glow: '--glow' };
 function applyLook(w, el) {
-  for (const k of ['ring', 'thick', 'track', 'glow']) el.style.setProperty('--' + k, w.look[k]);
+  for (const [k, v] of Object.entries(LOOK_VARS)) el.style.setProperty(v, w.look[k]);
   el.dataset.icons = w.look.icons;
 }
 function drawWarpUI() {
@@ -438,7 +441,6 @@ function inQuad(q, [x, y]) {
 }
 
 /* ---------- controls ---------- */
-const RINGS = ['#5ee6ff', '#7dffa8', '#ffd84d', '#ff7ac6', '#ffffff'];
 const NOTES = {
   full: 'Everything moves: sun rays turn, clouds drift, rain falls, the cursor blinks. Smoothest, but the projector redraws the warped wall every frame.',
   lite: 'Same motion at about 8 frames a second. Feels alive, much lighter on the projector. Likely the everyday default.',
@@ -468,18 +470,27 @@ function renderSel() {
   if (sel) wallEl.querySelector(`.widget[data-wid="${w.id}"]`).classList.add('sel');
   $('#selName').textContent = sel ? types[w.type].name + (w.quad ? ' · warped' : '') : 'Nothing selected · click a widget on the wall';
   $('#widgetTools').hidden = !sel;
+  renderLook(sel ? w : null);
   if (sel) {
     onTabs('mode', w.mode); onTabs('wAnchor', w.anchor);
     $('#anchorRow').hidden = w.mode !== 'rect';
     renderOpts(w);
-    renderLook(w);
-    $('#changeTo').innerHTML = Object.values(types).map(m => `<option value="${esc(m.type)}"${m.type === w.type ? ' selected' : ''}>${m.type === w.type ? 'Keep ' : ''}${esc(m.name)}</option>`).join('');
+
   }
 }
 
+// the Look card: colors (picker + presets), ring sizes and icon colors of the selected widget
 function renderLook(w) {
+  $('#lookTools').hidden = !w;
+  $('#lookState').textContent = w ? `${types[w.type].name}'s own colors and ring.` : 'Select a widget to change its look.';
+  if (!w) return;
   const look = w.look;
-  document.querySelectorAll('#wSwatches .sw').forEach(b => b.classList.toggle('on', b.dataset.v === look.ring));
+  document.querySelectorAll('.colorrow').forEach(row => {
+    const v = look[row.dataset.look], pick = row.querySelector('.cpick');
+    if (document.activeElement !== pick) pick.value = v;
+    row.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  });
+  $('#iconRow').hidden = look.icons !== 'custom';
   for (const k of ['thick', 'track', 'glow']) { const r = $('#w' + k[0].toUpperCase() + k.slice(1)); if (document.activeElement !== r) r.value = look[k]; }
   $('#wThickVal').textContent = look.thick; $('#wTrackVal').textContent = Math.round(look.track * 200) + '%'; $('#wGlowVal').textContent = Math.round(look.glow * 100) + '%';
   onTabs('wIcons', look.icons);
@@ -660,13 +671,12 @@ function bindControls() {
   $('#del').onclick = deleteSelected;
   buildGallery();
   $('#gallery').onclick = e => { const b = e.target.closest('.gitem'); if (b && types[b.dataset.type]) addWidget(b.dataset.type); };
-  $('#changeTo').onchange = e => {   // swap the type, keep position, size, look and warp
-    const w = selW(), t = e.target.value;
-    if (!w || !types[t] || t === w.type) return;
-    w.type = t; w.opts = defaultOpts(types[t]); saveLayout(); buildStage();
-  };
-  $('#wSwatches').innerHTML = RINGS.map(c => `<button class="sw" style="--s:${c}" data-v="${c}" aria-label="Ring color ${c}"></button>`).join('');
-  $('#wSwatches').onclick = e => { const b = e.target.closest('.sw'); if (b) setLook('ring', b.dataset.v); };
+  document.querySelectorAll('.colorrow').forEach(row => {   // full color picker + quick presets
+    const k = row.dataset.look;
+    row.innerHTML = `<input type="color" class="cpick" aria-label="Pick a ${k} color">` + COLOR_PRESETS.map(c => `<button class="sw" style="--s:${c}" data-v="${c}" aria-label="${c}"></button>`).join('');
+    row.addEventListener('input', e => { if (e.target.classList.contains('cpick')) setLook(k, e.target.value); });
+    row.addEventListener('click', e => { const b = e.target.closest('.sw'); if (b) setLook(k, b.dataset.v); });
+  });
   for (const k of ['thick', 'track', 'glow']) $('#w' + k[0].toUpperCase() + k.slice(1)).oninput = e => setLook(k, +e.target.value);
   $('#wIcons').onclick = e => { const b = e.target.closest('button'); if (b) setLook('icons', b.dataset.v); };
   $('#mode').onclick = e => {
