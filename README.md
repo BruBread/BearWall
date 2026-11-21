@@ -16,12 +16,12 @@ Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need
 - **Click a widget** to move it or drag its corners to resize it. Everything snaps to an 8 px grid on a 1280 × 720 wall. **Click empty wall** to see it clean, exactly as the projector shows it.
 - **Hold Shift** to warp the selected widget to the wall's angle. Each widget has its own 4 corners, and it uses the same moves as the keystone page in [ProjectorRoot](https://github.com/BruBread/ProjectorRoot):
   - Drag a corner, drag an edge's square to stretch that side, or drag inside to move it. Scroll or pinch to zoom.
-  - Nudge a corner with Shift + arrows or the on-screen D-pad, in 1 px or 10 px steps.
-  - Undo and Flatten.
-  - On a phone, the "Warp handles" switch does what Shift does.
-- **Widgets:** weather, clock, date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
+  - Nudge a corner 1 px with Shift + arrows, and pick it with 1–4.
+  - Undo with Ctrl+Z, and flatten the widget back to a plain rectangle with Ctrl+R.
+- **Widgets:** weather, clock (digital, flip, analog, word clock), date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
+- **Adding and changing widgets:** pick one from the gallery of live previews to add it, or use **Change to** to swap a widget's type while keeping its spot, size, look and warp.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
-- **Styling:** ring color and thickness, glow, icon colors, and four motion levels.
+- **Look:** every widget has its own ring color, thickness, track brightness, glow and icon colors. **Motion** (Full, Lite, Calm, Off) applies to all of them.
 
 The prototype saves your layout and settings in your browser's local storage.
 

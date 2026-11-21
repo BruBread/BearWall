@@ -37,13 +37,15 @@ The projector doesn't hit the wall square-on, so **each widget gets its own 4-co
 - **Modes:**
   - **View:** nothing selected, the clean wall.
   - **Arrange:** click a widget to move it or resize it.
-  - **Warp:** hold Shift, or turn on the "Warp handles" switch on a phone.
+  - **Warp:** hold Shift.
 - **Moves while warping:** the same as ProjectorRoot's keystone page:
   - Drag a corner.
   - Drag an edge's square to stretch that side.
   - Drag inside to move the widget.
   - Scroll or pinch to zoom.
-- **Fine control:** nudge one corner by 1 or 10 px with Shift + arrows or a D-pad. There's also Undo and Flatten.
+- **Fine control:** nudge one corner by 1 px with Shift + arrows, and pick it with 1–4. Ctrl+Z undoes, and Ctrl+R flattens the widget back to a plain rectangle.
+- **Page layout:** Motion sits left of the wall preview and Warp sits right of it. Those are the only settings shared by every widget. Everything else, including each widget's look, belongs to that widget.
+- **Phone:** the phone control design comes later.
 - **Arrange on a warped widget** moves its whole shape on the 8 px grid.
 - **How it's drawn:** the widget lays out flat at its own size, and a CSS `matrix3d` homography maps it onto its corners. The GPU does this natively, and Chrome 95 supports it. Widgets don't know they're warped.
 - **Limits:** corners stay on the wall, and folded or mirrored shapes are refused.
