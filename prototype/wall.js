@@ -13,7 +13,8 @@
  *     { key: 'style', label: 'Style', type: 'tabs', choices: [['digital', 'Digital'], ['analog', 'Analog']], value: 'digital' },
  *     { key: 'h24', label: '24-hour time', type: 'switch', value: false },
  *     { key: 'title', label: 'Title', type: 'text', value: '' },          // also type 'date' ('YYYY-MM-DD') and 'time' ('HH:MM')
- *   ],                                // tabs values are strings; switch values are booleans
+ *     { key: 'tz', label: 'Zone', type: 'select', choices: [['', 'Off'], ['Asia/Tokyo', 'Tokyo']], value: '' },
+ *   ],                                // tabs/select values are strings; switch values are booleans
  *   every: 1000,                      // optional: also call update() every this many ms (a clock wants 1000)
  *   css: `.w-clock .digits { ... }`,  // injected once; scope every rule under .w-<type>
  *   mount(el, ctx) {},                // build your DOM inside el, once
@@ -34,7 +35,9 @@
  *   opts,        // this widget's option values, by key
  *   now,         // Date. Follows the sample time-of-day slider in Sample mode.
  *   motion,      // 'full' | 'lite' | 'calm' | 'off'
- *   settings,    // global look: { ring, thick, track, glow, icons, name }
+ *   look,        // this widget's own look: { ring, thick, track, glow, icons }. Already applied as the CSS variables
+ *                // --ring, --thick, --track, --glow and data-icons on the widget, so CSS can just use var(--ring) etc.
+ *   settings,    // shared settings: { name } (the greeting name)
  *   city,        // { name, admin, lat, lon }
  *   weather: { live, cond, temp, hum, feels, hi, lo, night, sunrise: Date, sunset: Date,
  *              hourly: [{ time: Date, temp, cond, night, pop }] },   // next 24 h from this hour, pop = rain chance %
@@ -91,7 +94,8 @@ const util = {
   iconSVG: (cond, night) => svg(icon(cond, night)),
   ringHTML: (inner = '') => `<div class="ring"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" pathLength="100"/></svg><div class="tp">${inner}</div></div>`,
   setRing(ringEl, pct) {
-    const r = 50 - S.thick / 2 - 1, arc = ringEl.querySelector('.arc');
+    const thick = parseFloat(getComputedStyle(ringEl).getPropertyValue('--thick')) || 9;   // this widget's own look
+    const r = 50 - thick / 2 - 1, arc = ringEl.querySelector('.arc');
     ringEl.querySelectorAll('circle').forEach(c => c.setAttribute('r', r));
     if (!arc.style.strokeDashoffset) arc.getBoundingClientRect();   // first fill: start from empty so it sweeps
     arc.style.strokeDashoffset = 100 - clamp(pct, 0, 100);
@@ -193,7 +197,9 @@ const CITIES = [
   ['Tokyo', 'Tokyo, JP', 35.68, 139.69], ['Singapore', 'SG', 1.29, 103.85],
   ['London', 'England, GB', 51.51, -0.13], ['New York', 'New York, US', 40.71, -74.01]
 ].map(([name, admin, lat, lon]) => ({ name, admin, lat, lon }));
-const DEFAULT_SETTINGS = { city: CITIES[0], name: '', ring: '#5ee6ff', thick: 9, track: .18, glow: .5, motion: 'full', icons: 'natural' };
+const LOOK_KEYS = ['ring', 'thick', 'track', 'glow', 'icons'];
+const DEFAULT_LOOK = { ring: '#5ee6ff', thick: 9, track: .18, glow: .5, icons: 'natural' };
+const DEFAULT_SETTINGS = { city: CITIES[0], name: '', motion: 'full' };
 
 let L = store.get('layout', null);
 const savedSettings = store.get('settings', null);
@@ -202,7 +208,7 @@ if (!savedSettings && matchMedia('(prefers-reduced-motion: reduce)').matches) S.
 const P = { source: 'live', cond: 'partly', temp: 31, hum: 74, hour: 19.5 };   // sample values, not saved
 let live = null, liveState = 'loading';   // loading | live | offline
 let sel = null;                           // selected widget id; none = View
-let corner = 0, step = 1, shiftHeld = false;   // warp editing
+let corner = 0, shiftHeld = false;   // warp editing
 const inPanel = q => q.every(([x, y]) => x >= 0 && x <= WALL_W && y >= 0 && y <= WALL_H);
 const saveLayout = () => store.set('layout', L);
 const saveSettings = () => store.set('settings', S);
@@ -215,6 +221,8 @@ function migrate(old) {
   return { widgets: old.screens.flatMap(s => (Array.isArray(s.widgets) ? s.widgets : [])
     .map(w => Object.assign({}, w, { x: (+w.x || 0) + (+s.x || 0), y: (+w.y || 0) + (+s.y || 0) }))) };
 }
+// the look the whole wall used to share; it becomes each widget's starting look
+const oldLook = Object.fromEntries(LOOK_KEYS.filter(k => savedSettings && savedSettings[k] != null).map(k => [k, savedSettings[k]]));
 function normalize() {
   L = migrate(L);
   if (!L || !Array.isArray(L.widgets)) L = copy(DEFAULT_LAYOUT);
@@ -226,6 +234,7 @@ function normalize() {
     w.mode = w.mode === 'rect' ? 'rect' : 'square';
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
     if (known(w)) w.opts = Object.assign(defaultOpts(types[w.type]), w.opts);   // unknown types are kept but not shown
+    w.look = Object.assign({}, DEFAULT_LOOK, oldLook, w.look);   // older saves had one look for the whole wall
   }
 }
 
@@ -287,7 +296,7 @@ async function fetchWeather() {
 let stage, stageBox, wallEl, inst = [];
 const HANDLES = ['nw', 'ne', 'sw', 'se'].map(h => `<i class="handle" data-h="${h}"></i>`).join('');
 const selW = () => (sel && widgetOf(sel)) || null;
-const warpOn = () => !!selW() && (shiftHeld || $('#warpSticky').checked);
+const warpOn = () => !!selW() && shiftHeld;
 const quadOf = w => w.quad || rectPts(w.x, w.y, w.w, w.h);
 
 function place(el, b) {
@@ -308,17 +317,23 @@ function positionWidget(w) {
     place(el, w);
   }
   el.dataset.label = types[w.type].name + (w.quad ? ' · warped' : '');
+  applyLook(w, el);
+}
+function applyLook(w, el) {
+  for (const k of ['ring', 'thick', 'track', 'glow']) el.style.setProperty('--' + k, w.look[k]);
+  el.dataset.icons = w.look.icons;
 }
 function drawWarpUI() {
   const ui = $('#warpui'), w = selW(), on = warpOn();
   ui.hidden = !on;
   wallEl.querySelectorAll('.widget').forEach(el => el.classList.toggle('warping', on && el.dataset.wid === sel));
-  if (!w) return;
+  $('#undo').disabled = !undo.length;
+  $('#flatten').disabled = !(w && w.quad);
+  $('#warpState').textContent = !w ? 'Select a widget on the wall, then hold Shift to warp it.'
+    : on ? `Warping ${types[w.type].name}. Drag the colored corners.` : `Hold Shift to warp ${types[w.type].name}.`;
+  if (!w) { $('#readout').textContent = '–'; return; }
   const q = quadOf(w), pct = (x, y) => [x / WALL_W * 100 + '%', y / WALL_H * 100 + '%'];
   $('#readout').textContent = `${CORNERS[corner]} · ${q[corner].map(Math.round).join(', ')}`;
-  document.querySelectorAll('#corners button').forEach(b => b.classList.toggle('on', +b.dataset.i === corner));
-  $('#undo').disabled = !undo.length;
-  $('#flatten').disabled = !w.quad;
   if (!on) return;
   ui.querySelector('polygon').setAttribute('points', [0, 1, 3, 2].map(i => q[i].join(',')).join(' '));
   ui.querySelectorAll('.ch').forEach(h => { const i = +h.dataset.i; [h.style.left, h.style.top] = pct(...q[i]); h.classList.toggle('on', i === corner); });
@@ -344,7 +359,7 @@ function buildStage() {
 }
 
 function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
-  const ctx = { mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, now, motion: S.motion, settings: S, city: S.city, weather };
+  const ctx = { mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather };
   i.el.className = `wgt w-${i.w.type} ${i.w.mode} ${i.w.anchor}`;
   try {
     if (!i.mounted) { i.m.mount(i.el, ctx); i.mounted = true; }
@@ -354,10 +369,9 @@ function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
 }
 
 function render() {
-  const root = document.documentElement.style, now = timeNow(), weather = weatherNow(now);
-  stage.dataset.icons = S.icons;
-  root.setProperty('--ring', S.ring); root.setProperty('--thick', S.thick); root.setProperty('--track', S.track); root.setProperty('--glow', S.glow);
+  const now = timeNow(), weather = weatherNow(now);
   inst.forEach(i => updateInst(i, now, weather));
+  renderGallery(now, weather);
   renderControls();
 }
 // everything that depends on the selection, without re-rendering the widgets
@@ -441,10 +455,8 @@ function renderControls() {
     : st === 'loading' ? 'Loading weather…' : 'Live weather unavailable here · showing sample';
   $('#sample').hidden = P.source !== 'sample';
   $('#tempVal').textContent = P.temp + '°C'; $('#humVal').textContent = P.hum + '%'; $('#hourVal').textContent = clockLabel(P.hour);
-  $('#thickVal').textContent = S.thick; $('#trackVal').textContent = Math.round(S.track * 200) + '%'; $('#glowVal').textContent = Math.round(S.glow * 100) + '%';
   document.querySelectorAll('#conds .chip').forEach(b => b.classList.toggle('on', b.dataset.v === P.cond));
-  document.querySelectorAll('#swatches .sw').forEach(b => b.classList.toggle('on', b.dataset.v === S.ring));
-  onTabs('source', P.source); onTabs('motion', S.motion); onTabs('icons', S.icons); onTabs('step', String(step));
+  onTabs('source', P.source); onTabs('motion', S.motion);
   $('#motionNote').textContent = NOTES[S.motion];
   renderChrome();
 }
@@ -460,7 +472,43 @@ function renderSel() {
     onTabs('mode', w.mode); onTabs('wAnchor', w.anchor);
     $('#anchorRow').hidden = w.mode !== 'rect';
     renderOpts(w);
+    renderLook(w);
+    $('#changeTo').innerHTML = Object.values(types).map(m => `<option value="${esc(m.type)}"${m.type === w.type ? ' selected' : ''}>${m.type === w.type ? 'Keep ' : ''}${esc(m.name)}</option>`).join('');
   }
+}
+
+function renderLook(w) {
+  const look = w.look;
+  document.querySelectorAll('#wSwatches .sw').forEach(b => b.classList.toggle('on', b.dataset.v === look.ring));
+  for (const k of ['thick', 'track', 'glow']) { const r = $('#w' + k[0].toUpperCase() + k.slice(1)); if (document.activeElement !== r) r.value = look[k]; }
+  $('#wThickVal').textContent = look.thick; $('#wTrackVal').textContent = Math.round(look.track * 200) + '%'; $('#wGlowVal').textContent = Math.round(look.glow * 100) + '%';
+  onTabs('wIcons', look.icons);
+}
+function setLook(k, v) {
+  const w = selW();
+  if (!w) return;
+  w.look[k] = v; saveLayout();
+  applyLook(w, wallEl.querySelector(`.widget[data-wid="${w.id}"]`));
+  const i = inst.find(x => x.w === w);
+  if (i) updateInst(i);   // the ring radius follows the thickness
+  renderLook(w);
+}
+
+// the Add gallery: a live, still preview of every widget type
+function buildGallery() {
+  $('#gallery').innerHTML = Object.values(types).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="wgt" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"></div></div>${esc(m.name)}</button>`).join('');
+  $('#gallery').querySelectorAll('.gitem').forEach(b => {
+    const el = b.querySelector('.wgt');
+    new ResizeObserver(() => { el.style.setProperty('--u', Math.min(el.offsetWidth, el.offsetHeight) / 100 + 'px'); renderGallery(); }).observe(el);
+  });
+}
+function renderGallery(now = timeNow(), weather = weatherNow(now)) {
+  $('#gallery').querySelectorAll('.gitem').forEach(b => {
+    const m = types[b.dataset.type], el = b.querySelector('.wgt');
+    const ctx = { mode: 'square', anchor: 'right', opts: defaultOpts(m), look: DEFAULT_LOOK, now, motion: 'off', settings: S, city: S.city, weather };
+    el.className = `wgt w-${m.type} square right`;
+    try { if (!el._mounted) { m.mount(el, ctx); el._mounted = true; } m.update(el, ctx); } catch (e) { console.error(`preview "${m.type}" failed:`, e); }
+  });
 }
 
 // per-widget settings, drawn from the module's `options`
@@ -468,12 +516,14 @@ function optHTML(o) {
   const k = esc(o.key), label = esc(o.label);
   if (o.type === 'tabs') return `<div class="lbl"><span>${label}</span></div><div class="tabs" data-k="${k}">${o.choices.map(([v, n]) => `<button data-v="${esc(v)}">${esc(n)}</button>`).join('')}</div>`;
   if (o.type === 'switch') return `<label class="row">${label}<input type="checkbox" class="switch" data-k="${k}"></label>`;
+  if (o.type === 'select') return `<div class="lbl"><span>${label}</span></div><select class="field" data-k="${k}" aria-label="${label}">${o.choices.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('')}</select>`;
   const type = o.type === 'date' || o.type === 'time' ? o.type : 'text';
   return `<div class="lbl"><span>${label}</span></div><input class="field" type="${type}" data-k="${k}" maxlength="40" autocomplete="off" aria-label="${label}">`;
 }
 function renderOpts(w) {
   const box = $('#widgetOpts'), opts = types[w.type].options || [];
-  if (box._for !== w) { box._for = w; box.innerHTML = opts.map(optHTML).join(''); }
+  const key = w.id + ':' + w.type;   // rebuild when the widget or its type changes
+  if (box._for !== key) { box._for = key; box.innerHTML = opts.map(optHTML).join(''); }
   for (const o of opts) {
     const v = w.opts[o.key];
     if (o.type === 'tabs') { box.querySelectorAll(`.tabs[data-k="${o.key}"] button`).forEach(b => b.classList.toggle('on', b.dataset.v === String(v))); continue; }
@@ -501,7 +551,7 @@ function deleteSelected() {
 }
 function addWidget(type) {
   const m = types[type], [w0, h0] = m.size.square;
-  const w = { id: uid(), type, mode: 'square', anchor: 'right', x: snap((WALL_W - w0) / 2), y: snap((WALL_H - h0) / 2), w: w0, h: h0, opts: defaultOpts(m) };
+  const w = { id: uid(), type, mode: 'square', anchor: 'right', x: snap((WALL_W - w0) / 2), y: snap((WALL_H - h0) / 2), w: w0, h: h0, opts: defaultOpts(m), look: copy(DEFAULT_LOOK) };
   fitInside(w, WALL_W, WALL_H);
   L.widgets.push(w); sel = w.id; saveLayout(); buildStage();
 }
@@ -592,27 +642,33 @@ function bindControls() {
     if (!w) return;
     if (e.key === 'Escape') { select(null); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); flatten(w); return; }   // with nothing selected, Ctrl+R reloads as usual
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
     if (warpOn() && /^Digit[1-4]$/.test(e.code)) { corner = +e.code.slice(5) - 1; drawWarpUI(); return; }
     const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
     if (!D) return;
     e.preventDefault();
-    if (warpOn()) return nudge(D[0] * step, D[1] * step);
+    if (warpOn()) return nudge(D[0], D[1]);
     if (w.quad) pushUndo('move', w);
     moveWidget(w, copy(w), D[0] * GRID, D[1] * GRID); saveLayout();
   });
 
   // warp tools
-  $('#warpSticky').onchange = drawWarpUI;
-  $('#corners').onclick = e => { const b = e.target.closest('button'); if (b) { corner = +b.dataset.i; drawWarpUI(); } };
-  $('#dpad').onclick = e => { const b = e.target.closest('button'); if (!b) return; const [dx, dy] = b.dataset.nudge.split(',').map(Number); nudge(dx * step, dy * step); };
-  $('#step').onclick = e => { const b = e.target.closest('button'); if (b) { step = +b.dataset.v; onTabs('step', String(step)); } };
   $('#undo').onclick = doUndo;
   $('#flatten').onclick = () => flatten(selW());
   // widget tools
   $('#del').onclick = deleteSelected;
-  $('#addType').innerHTML = Object.values(types).map(m => `<option value="${esc(m.type)}">${esc(m.name)}</option>`).join('');
-  $('#addWidget').onclick = () => { const t = $('#addType').value; if (types[t]) addWidget(t); };
+  buildGallery();
+  $('#gallery').onclick = e => { const b = e.target.closest('.gitem'); if (b && types[b.dataset.type]) addWidget(b.dataset.type); };
+  $('#changeTo').onchange = e => {   // swap the type, keep position, size, look and warp
+    const w = selW(), t = e.target.value;
+    if (!w || !types[t] || t === w.type) return;
+    w.type = t; w.opts = defaultOpts(types[t]); saveLayout(); buildStage();
+  };
+  $('#wSwatches').innerHTML = RINGS.map(c => `<button class="sw" style="--s:${c}" data-v="${c}" aria-label="Ring color ${c}"></button>`).join('');
+  $('#wSwatches').onclick = e => { const b = e.target.closest('.sw'); if (b) setLook('ring', b.dataset.v); };
+  for (const k of ['thick', 'track', 'glow']) $('#w' + k[0].toUpperCase() + k.slice(1)).oninput = e => setLook(k, +e.target.value);
+  $('#wIcons').onclick = e => { const b = e.target.closest('button'); if (b) setLook('icons', b.dataset.v); };
   $('#mode').onclick = e => {
     const b = e.target.closest('button'), w = selW();
     if (!b || !w || w.mode === b.dataset.v) return;
@@ -636,18 +692,15 @@ function bindControls() {
 
   $('#conds').innerHTML = CONDS.map(([v, n]) => `<button class="chip" data-v="${v}">${svg(icon(v, false))}${n}</button>`).join('');
   $('#conds').onclick = e => { const b = e.target.closest('.chip'); if (b) { P.cond = b.dataset.v; render(); } };
-  $('#swatches').innerHTML = RINGS.map(c => `<button class="sw" style="--s:${c}" data-v="${c}" aria-label="Ring color ${c}"></button>`).join('');
-  $('#swatches').onclick = e => { const b = e.target.closest('.sw'); if (b) { S.ring = b.dataset.v; saveSettings(); render(); } };
-  for (const id of ['motion', 'icons']) $('#' + id).onclick = e => {
+  $('#motion').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
-    S[id] = b.dataset.v; saveSettings(); if (id === 'motion') buildStage(); else render();
+    S.motion = b.dataset.v; saveSettings(); buildStage();
   };
   $('#source').onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     P.source = b.dataset.v; if (P.source === 'live' && liveState === 'offline') fetchWeather(); render();
   };
   for (const id of ['temp', 'hum', 'hour']) { const r = $('#' + id); r.value = P[id]; r.oninput = () => { P[id] = +r.value; render(); }; }
-  for (const id of ['thick', 'track', 'glow']) { const r = $('#' + id); r.value = S[id]; r.oninput = () => { S[id] = +r.value; saveSettings(); render(); }; }
   $('#name').value = S.name;
   $('#name').oninput = e => { S.name = e.target.value; saveSettings(); render(); };
   $('#replay').onclick = buildStage;   // remounting replays every intro animation

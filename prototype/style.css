@@ -20,7 +20,7 @@ button, input, select { font: inherit; color: inherit; }
 .b1 { background: var(--c); opacity: .35; top: -20vmax; left: -14vmax; }
 .b2 { background: #5b6cff; opacity: .3; bottom: -22vmax; right: -16vmax; }
 
-main { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding-block: 28px 48px;
+main { position: relative; z-index: 1; max-width: 1560px; margin: 0 auto; padding-block: 28px 48px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
 h1 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -.4px; }
@@ -37,7 +37,13 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 
 /* ---------- the wall ---------- */
 /* .stage is the projector's whole picture (1280 x 720). Each widget can have its own 4-corner warp. */
-.stage-card { margin-bottom: 18px; }
+/* top row: Motion | the wall | Warp. Narrower screens put the wall first and the two side cards under it. */
+.top { display: grid; grid-template-columns: 230px minmax(0, 1fr) 250px; gap: 18px; align-items: start; margin-bottom: 18px; }
+@media (max-width: 1199px) { .top { grid-template-columns: 1fr 1fr; } .top .stage-card { grid-column: 1 / -1; order: -1; } }
+@media (max-width: 640px) { .top { grid-template-columns: 1fr; } }
+.side .tabs { display: grid; grid-template-columns: 1fr 1fr; border-radius: 22px; }
+.actions.col { flex-direction: column; }
+.actions.col .btn { width: 100%; }
 .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .stage-head .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .wall-wrap { border-radius: 14px; }
@@ -87,9 +93,9 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 /* weather icons: one stroke width, round ends, so they match the ring */
 .ic svg, .chip svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
 .ic .cloud { fill: var(--wall); }
-.stage, .chips { --i-sun: #ffd84d; --i-moon: #fff1b8; --i-cloud: #eef3fb; --i-rain: #5ec8ff; --i-bolt: #ffd84d; --i-fog: #b9c6d8; }
-.stage[data-icons=white] { --i-sun: var(--w-text); --i-moon: var(--w-text); --i-cloud: var(--w-text); --i-rain: var(--w-text); --i-bolt: var(--w-text); --i-fog: var(--w-text); }
-.stage[data-icons=ring] { --i-sun: var(--ring); --i-moon: var(--ring); --i-cloud: var(--ring); --i-rain: var(--ring); --i-bolt: var(--ring); --i-fog: var(--ring); }
+:root { --i-sun: #ffd84d; --i-moon: #fff1b8; --i-cloud: #eef3fb; --i-rain: #5ec8ff; --i-bolt: #ffd84d; --i-fog: #b9c6d8; }
+[data-icons=white] { --i-sun: var(--w-text); --i-moon: var(--w-text); --i-cloud: var(--w-text); --i-rain: var(--w-text); --i-bolt: var(--w-text); --i-fog: var(--w-text); }
+[data-icons=ring] { --i-sun: var(--ring); --i-moon: var(--ring); --i-cloud: var(--ring); --i-rain: var(--ring); --i-bolt: var(--ring); --i-fog: var(--ring); }
 .c-sun { stroke: var(--i-sun); } .c-moon { stroke: var(--i-moon); } .c-cloud { stroke: var(--i-cloud); }
 .c-rain { stroke: var(--i-rain); } .c-bolt { stroke: var(--i-bolt); } .c-fog { stroke: var(--i-fog); }
 /* the ring: one fixed color, Apple Activity style, starts at 12 o'clock */
@@ -161,9 +167,11 @@ select.field option { background: #24183f; color: var(--text); }
 .btn.quiet { background: #ffffff14; color: var(--text); border: 1px solid var(--line); }
 .btn.danger { background: none; color: var(--c); border: 1px solid var(--c); }
 .btn:disabled { opacity: .35; cursor: default; }
-.add { display: flex; gap: 8px; }
-.add .field { flex: 1; min-width: 0; }
-.add .btn { flex: none; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.gitem { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 16px; border: 1px solid var(--line); background: #ffffff0d; cursor: pointer; font-weight: 800; font-size: 12px; text-align: left; transition: background .2s, transform .15s; }
+.gitem:hover { background: #ffffff1c; transform: translateY(-2px); }
+.gprev { position: relative; width: 100%; background: var(--wall); border-radius: 10px; overflow: hidden; pointer-events: none; padding: 6%; }
+.gprev .wgt { height: auto; aspect-ratio: var(--ar); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .selname { font-weight: 800; font-size: 15px; }
 .note { font-size: 13px; color: var(--dim); margin-top: 10px; line-height: 1.45; }
@@ -176,4 +184,5 @@ select.field option { background: #24183f; color: var(--text); }
 .dpad button { border: 1px solid var(--line); border-radius: 12px; background: #ffffff14; font-weight: 900; font-size: 18px; cursor: pointer; }
 .nudge .side { flex: 1; min-width: 0; }
 .readout { font-family: var(--mono); font-size: 13px; color: var(--text); text-transform: none; letter-spacing: 0; }
+#warpState { min-height: 2.9em; }
 @media (prefers-reduced-motion: reduce) { .chip, .tabs button, .switch, .switch::after { transition: none; } }

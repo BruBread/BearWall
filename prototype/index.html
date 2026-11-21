@@ -14,28 +14,48 @@
     <span class="pill" id="status"><i></i><span id="statusText">Loading weather…</span></span>
   </header>
 
-  <section class="glass stage-card">
-    <div class="stage-head">
-      <div>
-        <h2>On the wall</h2>
-        <div class="sub">Exactly what the projector shows. Black is no light, so widgets float on the wall.</div>
-      </div>
-      <div class="btns">
-        <button class="btn quiet" id="replay">Replay intro</button>
-        <button class="btn" id="full">Fullscreen</button>
-      </div>
-    </div>
-    <div class="wall-wrap" id="wallWrap">
-      <div class="stage-box" id="stageBox">
-        <div class="stage m-full" id="stage"><div class="wall" id="wall"></div></div>
-        <div class="warpui" id="warpui" hidden>
-          <svg viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true"><polygon></polygon></svg>
-          <i class="eh" data-e="0"></i><i class="eh" data-e="1"></i><i class="eh" data-e="2"></i><i class="eh" data-e="3"></i>
-          <i class="ch" data-i="0"></i><i class="ch" data-i="1"></i><i class="ch" data-i="2"></i><i class="ch" data-i="3"></i>
+  <div class="top">
+    <section class="glass side" aria-label="Motion for all widgets">
+      <h2>Motion</h2>
+      <div class="sub">Applies to every widget.</div>
+      <div class="lbl"><span>Level</span></div>
+      <div class="tabs" id="motion"><button data-v="full">Full</button><button data-v="lite">Lite</button><button data-v="calm">Calm</button><button data-v="off">Off</button></div>
+      <div class="note" id="motionNote"></div>
+    </section>
+    <section class="glass stage-card">
+      <div class="stage-head">
+        <div>
+          <h2>On the wall</h2>
+          <div class="sub">Exactly what the projector shows. Black is no light, so widgets float on the wall.</div>
+        </div>
+        <div class="btns">
+          <button class="btn quiet" id="replay">Replay intro</button>
+          <button class="btn" id="full">Fullscreen</button>
         </div>
       </div>
-    </div>
-  </section>
+      <div class="wall-wrap" id="wallWrap">
+        <div class="stage-box" id="stageBox">
+          <div class="stage m-full" id="stage"><div class="wall" id="wall"></div></div>
+          <div class="warpui" id="warpui" hidden>
+            <svg viewBox="0 0 1280 720" preserveAspectRatio="none" aria-hidden="true"><polygon></polygon></svg>
+            <i class="eh" data-e="0"></i><i class="eh" data-e="1"></i><i class="eh" data-e="2"></i><i class="eh" data-e="3"></i>
+            <i class="ch" data-i="0"></i><i class="ch" data-i="1"></i><i class="ch" data-i="2"></i><i class="ch" data-i="3"></i>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="glass side" aria-label="Warp">
+      <h2>Warp</h2>
+      <div class="sub" id="warpState">Select a widget on the wall, then hold Shift to warp it.</div>
+      <div class="lbl"><span>Active corner</span></div>
+      <div class="readout" id="readout">–</div>
+      <div class="actions col">
+        <button class="btn quiet" id="undo" disabled>Undo (Ctrl+Z)</button>
+        <button class="btn quiet" id="flatten" disabled>Flatten (Ctrl+R)</button>
+      </div>
+      <div class="note">Hold <b>Shift</b> on a selected widget, then drag a corner, drag an edge's square to stretch that side, drag inside to move it, or scroll to zoom. Shift + arrows nudge the active corner 1 px, 1–4 pick it.</div>
+    </section>
+  </div>
 
   <div class="grid">
     <section class="glass">
@@ -53,39 +73,25 @@
         </div>
         <div id="widgetOpts"></div>
 
-        <div class="lbl"><span>Warp</span><span class="readout" id="readout"></span></div>
-        <label class="row">Warp handles (same as holding Shift)<input type="checkbox" class="switch" id="warpSticky"></label>
-        <div class="corners" id="corners">
-          <button data-i="0"><span class="dot" style="background:var(--lt)"></span>Top left</button>
-          <button data-i="1"><span class="dot" style="background:var(--rt)"></span>Top right</button>
-          <button data-i="2"><span class="dot" style="background:var(--lb)"></span>Bottom left</button>
-          <button data-i="3"><span class="dot" style="background:var(--rb)"></span>Bottom right</button>
-        </div>
-        <div class="nudge">
-          <div class="dpad" id="dpad">
-            <span></span><button data-nudge="0,-1" aria-label="Up">↑</button><span></span>
-            <button data-nudge="-1,0" aria-label="Left">←</button><span></span><button data-nudge="1,0" aria-label="Right">→</button>
-            <span></span><button data-nudge="0,1" aria-label="Down">↓</button><span></span>
-          </div>
-          <div class="side">
-            <div class="lbl" style="margin-top:0"><span>Step</span></div>
-            <div class="tabs" id="step"><button data-v="1">1 px</button><button data-v="10">10 px</button></div>
-          </div>
-        </div>
-        <div class="actions">
-          <button class="btn quiet" id="undo" disabled>Undo</button>
-          <button class="btn quiet" id="flatten">Flatten</button>
-          <button class="btn danger" id="del">Delete widget</button>
-        </div>
+        <div class="lbl"><span>Look</span></div>
+        <div class="swatches" id="wSwatches"></div>
+        <div class="lbl"><span>Ring thickness</span><span id="wThickVal"></span></div>
+        <input type="range" id="wThick" min="4" max="16" step="1" aria-label="Ring thickness">
+        <div class="lbl"><span>Track brightness</span><span id="wTrackVal"></span></div>
+        <input type="range" id="wTrack" min="0" max=".5" step=".02" aria-label="Track brightness">
+        <div class="lbl"><span>Glow</span><span id="wGlowVal"></span></div>
+        <input type="range" id="wGlow" min="0" max="1" step=".05" aria-label="Glow">
+        <div class="lbl"><span>Icon colors</span></div>
+        <div class="tabs" id="wIcons"><button data-v="natural">Natural</button><button data-v="white">White</button><button data-v="ring">Ring color</button></div>
+        <div class="lbl"><span>Change to</span></div>
+        <select class="field" id="changeTo" aria-label="Change this widget to another type"></select>
+        <div class="actions"><button class="btn danger" id="del">Delete widget</button></div>
       </div>
 
-      <div class="lbl"><span>Add</span></div>
-      <div class="add">
-        <select class="field" id="addType" aria-label="Widget type"></select>
-        <button class="btn" id="addWidget">Add widget</button>
-      </div>
+      <div class="lbl"><span>Add a widget</span></div>
+      <div class="gallery" id="gallery"></div>
       <div class="actions"><button class="btn quiet" id="reset">Reset widgets</button></div>
-      <div class="note">Arrows move the widget 8 px. Shift + arrows nudge the active corner, 1–4 pick it, Ctrl+Z undoes a warp. Delete removes the widget, Esc deselects. While warping: drag a corner, drag an edge's square to stretch that side, drag inside to move it, scroll or pinch to zoom.</div>
+      <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Warping is in the Warp card.</div>
     </section>
 
     <section class="glass">
@@ -115,27 +121,7 @@
       <input class="field" id="name" placeholder="Optional" maxlength="24" autocomplete="off" aria-label="Name in greeting">
     </section>
 
-    <section class="glass">
-      <h2>Ring &amp; glow</h2>
-      <div class="lbl"><span>Ring color</span></div>
-      <div class="swatches" id="swatches"></div>
-      <div class="lbl"><span>Ring thickness</span><span id="thickVal"></span></div>
-      <input type="range" id="thick" min="4" max="16" step="1" aria-label="Ring thickness">
-      <div class="lbl"><span>Track brightness</span><span id="trackVal"></span></div>
-      <input type="range" id="track" min="0" max=".5" step=".02" aria-label="Track brightness">
-      <div class="lbl"><span>Icon colors</span></div>
-      <div class="tabs" id="icons"><button data-v="natural">Natural</button><button data-v="white">White</button><button data-v="ring">Ring color</button></div>
-      <div class="lbl"><span>Glow</span><span id="glowVal"></span></div>
-      <input type="range" id="glow" min="0" max="1" step=".05" aria-label="Glow">
-    </section>
 
-    <section class="glass">
-      <h2>Motion</h2>
-      <div class="sub">How alive it feels, against how hard the projector works.</div>
-      <div class="lbl"><span>Level</span></div>
-      <div class="tabs" id="motion"><button data-v="full">Full</button><button data-v="lite">Lite</button><button data-v="calm">Calm</button><button data-v="off">Off</button></div>
-      <div class="note" id="motionNote"></div>
-    </section>
   </div>
 </main>
 
