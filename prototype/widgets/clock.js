@@ -88,7 +88,8 @@ const TZS = [['', 'Off'], ['Asia/Manila', 'Manila'], ['Asia/Tokyo', 'Tokyo'], ['
   ['America/Los_Angeles', 'Los Angeles'], ['UTC', 'UTC']];
 const TZ_NAME = Object.fromEntries(TZS), fmts = {};
 const fmt = (k, o) => fmts[k] || (fmts[k] = new Intl.DateTimeFormat(o.locale, o));
-const dateLine = now => fmt('date', { locale: 'en-GB', weekday: 'short', day: 'numeric', month: 'short' }).format(now);
+// built from parts: browsers disagree on the punctuation of a whole formatted date (Chrome 95 adds a comma)
+const dateLine = now => `${fmt('wd', { locale: 'en-US', weekday: 'short' }).format(now)} ${now.getDate()} ${fmt('mo', { locale: 'en-US', month: 'short' }).format(now)}`;
 function tzLine(now, tz, h24) {
   try {
     return TZ_NAME[tz] + ' ' + fmt(tz + h24, h24 ? { locale: 'en-US', timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
