@@ -42,23 +42,14 @@ Coordinates are wall pixels. `quad` is optional. It holds the widget's 4 corners
 
 ## Warping onto a real wall
 
-The projector doesn't hit the wall square-on, so **each widget gets its own 4-corner warp**.
-- **Modes:**
-  - **View:** nothing selected, the clean wall.
-  - **Arrange:** click a widget to move it or resize it.
-  - **Warp:** hold Shift.
-- **Moves while warping:** the same as ProjectorRoot's keystone page:
-  - Drag a corner.
-  - Drag an edge's square to stretch that side.
-  - Drag inside to move the widget.
-  - Scroll or pinch to zoom.
-- **Fine control:** nudge one corner by 1 px with Shift + arrows, and pick it with 1–4. Ctrl+Z undoes, and Ctrl+R flattens the widget back to a plain rectangle.
-- **Page layout:** left of the wall preview are Motion and Add a widget. Right of it are Warp and the selected widget's Look: ring, text and secondary text colors (color picker or presets), ring thickness, track, glow, and icon colors including a custom color. Motion is the only look setting shared by every widget.
-- **Phone:** the phone control design comes later.
-- **Arrange on a warped widget** moves its whole shape on the 8 px grid.
-- **How it's drawn:** the widget lays out flat at its own size, and a CSS `matrix3d` homography maps it onto its corners. The GPU does this natively, and Chrome 95 supports it. Widgets don't know they're warped.
-- **Limits:** corners stay on the wall, and folded or mirrored shapes are refused.
-- **No root needed:** the wall page applies the warps itself, so the hardware keystone can stay neutral. That may also make animation cheaper, because SurfaceFlinger then has no keystone pass to redo every frame. Measure this in Phase 1.
+The projector doesn't hit the wall square-on, so **each section gets its own 4-corner warp**, and the widgets inside a section bend with it. Widgets have no warp of their own.
+- **Modes:** View (nothing selected, the clean wall), Arrange (click a widget or section to move or resize it), Warp (hold Shift with a section selected).
+- **Moves while warping:** the same as ProjectorRoot's keystone page: drag a corner, drag an edge's square to stretch that side, drag inside to move the section, scroll or pinch to zoom.
+- **Fine control:** Shift + arrows nudge one corner by 1 px, 1–4 pick it, Ctrl+Z undoes, Ctrl+R flattens.
+- **How it's drawn:** the section lays out flat at its own size, and a CSS `matrix3d` homography maps it onto its corners. The GPU does this natively, and Chrome 95 supports it.
+- **Limits:** corners stay on the panel, and folded or mirrored shapes are refused.
+- **No root needed:** the wall page applies the warps itself, so the hardware keystone can stay neutral. Measure the animation cost of that in Phase 1.
+- **Shift on a widget** is free for widget-specific editing: on a Photos widget, Shift + resize changes the box's shape and crops the photo (normally the box keeps the photo's proportions).
 
 ## Look
 
