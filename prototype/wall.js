@@ -94,11 +94,30 @@ const ON_PROJECTOR = /^https?:$/.test(location.protocol) && /^\/(wall|control)\/
 const WALL_ONLY = ON_PROJECTOR && location.pathname.startsWith('/wall');
 if (WALL_ONLY) document.documentElement.classList.add('wallmode');
 const CLIENT = Math.random().toString(36).slice(2, 10);   // so a page ignores the echo of its own saves
-const SHARED = ['layout', 'settings', 'devices', 'installed'], shared = {}, putTimers = {};
-function queuePut(k) {   // save to the app a moment after the last change
-  clearTimeout(putTimers[k]);
-  putTimers[k] = setTimeout(() => fetch('/api/kv/' + k, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Client': CLIENT },
-    body: JSON.stringify(shared[k]) }).catch(() => {}), 250);
+const SHARED = ['layout', 'settings', 'devices', 'installed'], shared = {}, putTimers = {}, lastPut = {};
+function queuePut(k) {   // send to the app at most ~10 times a second; each send carries the newest value (drags show live)
+  if (putTimers[k]) return;
+  const wait = Math.max(0, 100 - (Date.now() - (lastPut[k] || 0)));
+  putTimers[k] = setTimeout(() => {
+    putTimers[k] = null; lastPut[k] = Date.now();
+    fetch('/api/kv/' + k, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Client': CLIENT }, body: JSON.stringify(shared[k]) }).catch(() => {});
+  }, wait);
+}
+// the control page tells the wall what's selected, so the real wall shows the box too (not saved)
+let liveSent = '';
+function sendLive() {
+  if (!ON_PROJECTOR || WALL_ONLY) return;
+  const s = selS(), state = JSON.stringify(s ? { sid: s.id, warping: warpOn() } : {});
+  if (state === liveSent) return;
+  liveSent = state;
+  fetch('/api/live', { method: 'POST', headers: { 'X-Client': CLIENT }, body: state }).catch(() => {});
+}
+let remote = {};   // on the wall: what the control page has selected
+function showRemote() {
+  if (!WALL_ONLY) return;
+  wallEl.querySelectorAll('.remote-sel').forEach(el => el.classList.remove('remote-sel', 'remote-warp'));
+  const s = remote.sid && sectionOf(remote.sid), el = s && secEl(s);
+  if (el) { el.classList.add('remote-sel'); el.classList.toggle('remote-warp', !!remote.warping); }
 }
 // Elsewhere (opened as a file, or the artifact) everything is saved in this browser.
 const store = {
@@ -549,6 +568,7 @@ function renderChrome() {
   renderSel();
   renderSections();
   drawWarpUI();
+  sendLive();
 }
 
 /* ---------- warp editing (same moves as the keystone page, on the selected widget or section) ---------- */
@@ -1038,6 +1058,8 @@ function bindStage() {
     drag = null;
     drawWarpUI();
   };
+  // on the projector, save while dragging (throttled) so the real wall moves along live
+  stageBox.addEventListener('pointermove', () => { if (ON_PROJECTOR && ((drag && drag.kind !== 'draw') || pinch)) saveLayout(); });
   stageBox.addEventListener('pointerup', end);
   stageBox.addEventListener('pointercancel', end);
   // double-click a section to go inside it; double-click outside it to come back
@@ -1060,7 +1082,7 @@ function bindStage() {
 
 function bindControls() {
   const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
-  const setShift = on => { if (shiftHeld !== on) { shiftHeld = on; drawWarpUI(); } };
+  const setShift = on => { if (shiftHeld !== on) { shiftHeld = on; drawWarpUI(); sendLive(); } };
   document.addEventListener('keyup', e => { if (e.key === 'Shift') setShift(false); });
   window.addEventListener('blur', () => setShift(false));
   document.addEventListener('keydown', e => {
@@ -1362,15 +1384,31 @@ function listen() {
   const es = new EventSource('/api/events');
   es.onmessage = e => {
     if (e.data === 'reload') return location.reload();
+    if (e.data.startsWith('live:')) {   // live:<client>:<json>
+      const rest = e.data.slice(5), json = rest.slice(rest.indexOf(':') + 1);
+      try { remote = JSON.parse(json) || {}; } catch (err) { remote = {}; }
+      return showRemote();
+    }
     const [, k, who] = e.data.split(':');
     if (who === CLIENT || !SHARED.includes(k)) return;
     fetch('/api/kv/' + k, { cache: 'no-store' }).then(r => r.json()).then(v => {
       shared[k] = v;
-      if (k === 'layout' && !drag) { L = store.get('layout', null); normalize(); buildStage(); }
+      if (k === 'layout' && !drag) applyLayout(store.get('layout', null));
       else if (k === 'settings') { Object.assign(S, store.get('settings', {})); buildStage(); }
       else if (k === 'devices') { Object.assign(DEV, store.get('devices', {})); render(); }
     }).catch(() => {});
   };
+}
+// a layout from the other side: if only positions, sizes or looks changed, move things in place (smooth while
+// someone drags); anything structural rebuilds the wall
+function applyLayout(next) {
+  const shape = l => JSON.stringify([l.windowOn, l.sections.map(s => [s.id, s.bg, s.bgOpts]), l.widgets.map(w => [w.id, w.type, w.section, w.mode, w.anchor, w.when, w.opts])]);
+  const before = shape(L);
+  L = next; normalize();
+  if (shape(L) !== before) { buildStage(); showRemote(); return; }
+  inst.forEach(i => { i.w = widgetOf(i.w.id) || i.w; });
+  bgInst.forEach(b => { b.s = sectionOf(b.s.id) || b.s; });
+  positionAll();
 }
 async function loadShared() {
   await Promise.all(SHARED.map(k => fetch('/api/kv/' + k, { cache: 'no-store' }).then(r => r.json()).then(v => { shared[k] = v; }).catch(() => {})));
@@ -1397,7 +1435,10 @@ window.BearWall = {
   async boot() {
     if (booted) return;
     booted = true;
-    if (ON_PROJECTOR) { await Promise.all([loadShared(), pollSystem()]); listen(); setInterval(pollSystem, 10000); }
+    if (ON_PROJECTOR) {
+      await Promise.all([loadShared(), pollSystem()]); listen(); setInterval(pollSystem, 10000);
+      addEventListener('pagehide', () => { if (!WALL_ONLY && navigator.sendBeacon) navigator.sendBeacon('/api/live', '{}'); });   // drop the outline on the wall
+    }
     stage = $('#stage'); stageBox = $('#stageBox'); wallEl = $('#wall');
     selfTest();
     normalize();

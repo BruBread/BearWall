@@ -246,3 +246,6 @@ select.field option { background: #24183f; color: var(--text); }
 .wallmode .wall-wrap, .wallmode .stage-box { height: 100%; padding: 0; border-radius: 0; }
 .wallmode .stage-box { pointer-events: none; }
 .wallmode .stage { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+.wallmode .section.remote-sel { outline: 3px dashed var(--c); outline-offset: -3px; }   /* selected on the control page */
+.wallmode .section.remote-sel::before { content: attr(data-label); position: absolute; z-index: 3; left: 6px; top: 6px; font: 800 18px var(--ui); white-space: nowrap; padding: 3px 10px; border-radius: 8px; background: #000d; color: var(--c); border: 1px solid var(--c); }
+.wallmode .section.remote-warp { background-image: linear-gradient(#ffffff55 1px, transparent 1px), linear-gradient(90deg, #ffffff55 1px, transparent 1px); background-size: 12.5% 12.5%; box-shadow: inset 0 0 0 2px #fff; }
