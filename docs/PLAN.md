@@ -90,19 +90,17 @@ Widgets are grouped into families. Each family is one widget in the gallery, wit
 - Stopwatch
 - Scheduled reminders that appear only when they're due
 
-**Alerts** (planned family, ideas stage): invisible until something matters, then it catches your attention.
+**Alerts** (planned family, ideas stage): things the system notices about your tech and home. Reminders are things you set. Alerts stay invisible until something matters, then catch your attention.
 - **Alert levels:** info is a quiet pulse, warning flashes once, critical flashes and, later, the bulb flashes too.
-- **Candidate styles:**
-  - Earthquake (USGS)
-  - Internet down or slow
-  - Rain soon and thunderstorms
-  - Dangerous heat index
-  - Bad air quality
-  - Extreme UV
-  - Typhoon
-  - Volcano alert level
-  - Projector overheating or low on storage
-  - Bedtime nudge
+- **Styles so far:** Internet (down or slow) and Projector health (temperature, storage).
+
+**Weather warnings** (planned additions to the Weather family, using the same attention levels):
+- Rain soon
+- Thunderstorm
+- Dangerous heat index
+- Bad air quality
+- Extreme UV
+- Typhoon
 
 The list below is the original idea list. Some items are now styles of a family.
 
