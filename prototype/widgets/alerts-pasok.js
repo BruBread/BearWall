@@ -38,14 +38,18 @@ async function poll() {
 }
 poll(); setInterval(poll, 15 * 60e3);
 
-const base = BearWall.alertModule('pasok', 'alerts-pasok', 'Walang Pasok', 'Walang Pasok');
+const base = BearWall.alertModule('pasok', 'alerts-pasok', 'Walang Pasok', 'Walang Pasok', {
+  icon: '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 15l15-7 15 7-15 7zM11 18v8c4 4 14 4 18 0v-8"/></svg>',
+  idle: ctx => { const k = keywordsOf(ctx.opts.keywords); return { title: 'Classes on', detail: k.length ? `No suspension news · watching ${k.join(', ')}` : 'Add a school or city to watch' }; }
+});
 BearWall.register(Object.assign({}, base, {
   options: [
     { key: 'keywords', label: 'School or city to watch (commas)', type: 'text', value: '' },
     { key: 'sample', label: 'Show a sample headline', type: 'switch', value: false }
   ],
   every: 60000,
-  css: `.w-alerts-pasok .u { color: var(--w-dim); font-size: calc(var(--u) * 4.5 * var(--fit, 1)); margin-top: calc(var(--u) * 1.5); opacity: .8; }
+  css: `.w-alerts-pasok .lv-ok .u { display: none; }
+    .w-alerts-pasok .u { color: var(--w-dim); font-size: calc(var(--u) * 4.5 * var(--fit, 1)); margin-top: calc(var(--u) * 1.5); opacity: .8; }
     .w-alerts-pasok.rect .u { font-size: calc(var(--u) * 11 * var(--fit, 1)); margin-top: calc(var(--u) * 2); }`,
   mount(el, ctx) {
     base.mount(el, ctx);

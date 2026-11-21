@@ -1,4 +1,4 @@
-// Storm (Weather style): shows only while a tropical cyclone is inside or heading into PAR (the Philippine Area of
+// Storm (Weather style): the PAR map with "No storms in PAR" normally; the storm's track when a tropical cyclone is inside or heading into PAR (the Philippine Area of
 // Responsibility). Map of PAR, the Philippines, the storm's track and forecast cone, from GDACS (free, no key).
 // PAGASA local names and signal numbers have no API; they need the Phase 1 projector server, so 'signal: n/a' for now.
 (function () {
@@ -44,7 +44,7 @@ SAMPLE.cone = cone(SAMPLE.future[0]);
 
 const boxes = new Set();
 const redraw = () => boxes.forEach(el => el.isConnected ? draw(el, el._ctx) : boxes.delete(el));
-let storm = null, listAt = 0;
+let storm = null, listAt = 0, okAt = 0;
 const geoCache = {};
 async function load() {
   if (Date.now() - listAt < 30 * 60e3) return;
@@ -53,6 +53,7 @@ async function load() {
     const r = await fetch('https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=TC');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const list = (await r.json()).features || [];
+    okAt = Date.now();
     // current storms whose centre or extent touches PAR
     const f = list.find(f => String(f.properties.iscurrent).toLowerCase() === 'true' && (inside(PAR, f.geometry.coordinates)
       || (f.bbox && f.bbox[2] >= 115 && f.bbox[0] <= 135 && f.bbox[3] >= 5 && f.bbox[1] <= 25)));
@@ -77,8 +78,7 @@ const P = ([lon, lat]) => `${((lon - 112) * 10).toFixed(1)},${((27 - lat) * 10).
 const poly = ring => ring.map(P).join(' ');
 function draw(el, ctx) {
   if (!ctx) return;
-  const s = storm || ((ctx.opts.sample || ctx.weather.live === false) ? SAMPLE : null);
-  if (!s) { if (el._html !== '') { el.innerHTML = ''; el._html = ''; } return; }   // nothing in PAR: stay invisible
+  const s = storm || ((ctx.opts.sample || ctx.weather.live === false) ? SAMPLE : { calm: true, name: 'No storms in PAR', past: [], cone: [] });
   const c = ctx.city, rect = ctx.mode === 'rect';
   const map = `<svg class="map" viewBox="0 0 260 240" preserveAspectRatio="xMidYMid meet">`
     + `<polygon class="par" points="${poly(PAR)}"/>`
@@ -87,8 +87,9 @@ function draw(el, ctx) {
     + (s.past || []).map(l => `<polyline class="trk" points="${poly(l)}"/>`).join('')
     + (s.future || []).map(l => `<polyline class="fut" points="${poly(l)}"/>`).join('')
     + `<circle class="me" cx="${P([c.lon, c.lat]).split(',')[0]}" cy="${P([c.lon, c.lat]).split(',')[1]}" r="3"/>`
-    + `<g transform="translate(${P(s.pos).replace(',', ' ')})"><g class="eye"><path d="M0 -9a9 9 0 0 1 9 9M0 9a9 9 0 0 1 -9 -9"/><circle r="3.2"/></g></g></svg>`;
-  const title = U.esc(s.name), sub = [s.local, s.wind ? s.wind + ' km/h' : '', 'signal: n/a'].filter(Boolean).map(U.esc).join(' · ');
+    + (s.pos ? `<g transform="translate(${P(s.pos).replace(',', ' ')})"><g class="eye"><path d="M0 -9a9 9 0 0 1 9 9M0 9a9 9 0 0 1 -9 -9"/><circle r="3.2"/></g></g>` : '') + '</svg>';
+  const title = U.esc(s.name), sub = s.calm ? U.esc(okAt ? `GDACS · checked ${U.ago(okAt)}` : 'Waiting for GDACS')
+    : [s.local, s.wind ? s.wind + ' km/h' : '', 'signal: n/a'].filter(Boolean).map(U.esc).join(' · ');
   const tag = s.sample ? '<b class="tag">SAMPLE</b>' : '';
   const html = rect
     ? `<div class="row">${map}<div class="tx"><div class="big fit">${tag}${title}</div><div class="sm fit">${sub}</div></div></div>`

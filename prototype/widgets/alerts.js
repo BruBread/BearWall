@@ -1,6 +1,6 @@
-// Alerts: things the system notices. Invisible until something is active, then it catches your attention.
-// Levels: info = a quiet glow pulse, warning = flashes once then stays, critical = keeps flashing (Full / Lite only).
-// Each style shows the most important active alert of its kind; the style files are one line each (alerts-*.js).
+// Alerts: things the system notices about your tech and home. Every style always shows a calm "all clear" view
+// (its idle state) and turns into an alert when something happens. Levels: info = a quiet glow pulse,
+// warning = flashes once then stays, critical = keeps flashing (Full / Lite only). One thing per style.
 (function () {
 const U = BearWall.util;
 const RANK = { critical: 3, warning: 2, info: 1 };
@@ -8,24 +8,26 @@ const topOf = (alerts, kind) => (alerts || []).filter(a => a.kind === kind)
   .sort((a, b) => RANK[b.level] - RANK[a.level] || b.since - a.since)[0];
 const MARK = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16"/><path d="M20 11v11M20 28.5v.5"/></svg>';
 
-// One module per kind. `type` and `styleName` differ; the drawing is shared.
-BearWall.alertModule = (kind, type, styleName, name) => Object.assign({
+// One module per style. spec = { icon, idle(ctx) -> { title, detail }, alert(ctx) -> { level, title, detail } | falsy }.
+// The alert comes from spec.alert, or from the runtime's ctx.alerts of this kind (internet, update).
+BearWall.alertModule = (kind, type, styleName, name, spec = {}) => Object.assign({
   type, name, styleName,
-  look: ['text', 'dim', 'glow'],
+  look: ['ring', 'text', 'dim', 'glow'], lookLabels: { ring: 'Accent color' },
   size: { square: [264, 264], rect: [488, 104] },
   every: 30000,
   mount(el) {
-    el.innerHTML = `<div class="al" hidden><div class="bd">${MARK}</div><div class="tx"><div class="t fit"></div><div class="d fit"></div></div></div>`;
+    el.innerHTML = `<div class="al"><div class="bd">${spec.icon || MARK}</div><div class="tx"><div class="t fit"></div><div class="d fit"></div></div></div>`;
   },
   update(el, ctx) {
-    const a = topOf(ctx.alerts, kind), al = el.querySelector('.al');
-    al.hidden = !a;
-    if (!a) { al._k = ''; return; }
-    const k = a.id + ':' + a.level;
+    const a = (spec.alert && spec.alert(ctx)) || topOf(ctx.alerts, kind), idle = !a && spec.idle ? spec.idle(ctx) : null, al = el.querySelector('.al');
+    al.hidden = !a && !idle;
+    if (al.hidden) { al._k = ''; return; }
+    const lv = a ? a.level : 'ok', k = (a ? a.id || a.title : 'ok') + ':' + lv;
     if (al._k !== k) { al.className = 'al'; void al.offsetWidth; al._k = k; }   // a new alert restarts its flash
-    al.className = 'al lv-' + a.level;
-    al.querySelector('.t').textContent = a.title;
-    al.querySelector('.d').textContent = a.detail || '';
+    al.className = 'al lv-' + lv;
+    al.querySelector('.bd').innerHTML = a && !spec.icon ? MARK : (spec.icon || MARK);
+    al.querySelector('.t').textContent = (a || idle).title;
+    al.querySelector('.d').textContent = (a || idle).detail || '';
     U.fit(el);
   }
 }, type === 'alerts' ? {} : { family: 'alerts' });
@@ -79,7 +81,7 @@ function speedAlert() {
 }
 const v = x => x == null ? '—' : x;
 
-const base = BearWall.alertModule('network', 'alerts', 'Network', 'Alerts');
+const base = BearWall.alertModule('network', 'alerts', 'Internet', 'Alerts');
 const net = Object.assign({}, base, {
   mount(el, ctx) {
     base.mount(el, ctx);
@@ -100,9 +102,10 @@ const net = Object.assign({}, base, {
       rg[i].querySelector('.n').textContent = v(sp[k]);
       U.setRing(rg[i].querySelector('.ring'), sp[k] ? Math.min(100, sp[k] / (usual(h) || sp[k]) * 100) : 0);
     });
-    s.querySelector('.ln').textContent = ctx.mode === 'rect'
-      ? `↓ ${v(sp.down)} Mbps · ↑ ${v(sp.up)} · ${v(sp.ping)} ms ± ${v(sp.jitter)}`
-      : `${v(sp.ping)} ms ± ${v(sp.jitter)}`;
+    const online = navigator.onLine ? 'Online' : 'Offline';
+    s.querySelector('.ln').textContent = !sp.at ? `${online} · speed test soon`
+      : ctx.mode === 'rect' ? `${online} · ↓ ${v(sp.down)} Mbps · ↑ ${v(sp.up)} · ${v(sp.ping)} ms ± ${v(sp.jitter)}`
+      : `${online} · ${v(sp.ping)} ms ± ${v(sp.jitter)}`;
     U.fit(el);
   }
 });
@@ -126,6 +129,8 @@ BearWall.register(Object.assign(net, {
     [class*="w-alerts"] .al { --al: var(--ring); position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: calc(var(--u) * 5); text-align: center; }
     [class*="w-alerts"] .al.lv-warning { --al: #ffb84d; }
+    [class*="w-alerts"] .al.lv-ok .bd { opacity: .65; }
+    [class*="w-alerts"] .al.lv-ok .t { font-weight: 700; text-shadow: none; }
     [class*="w-alerts"] .al.lv-critical { --al: #ff5e5e; }
     [class*="w-alerts"] .bd { width: calc(var(--u) * 36); height: calc(var(--u) * 36); color: var(--al); flex: none;
       filter: drop-shadow(0 0 calc(var(--glow) * var(--u) * 4) var(--al)); }

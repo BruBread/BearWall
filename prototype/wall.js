@@ -47,6 +47,8 @@
  *                // --ring, --thick, --track, --glow and data-icons on the widget, so CSS can just use var(--ring) etc.
  *   settings,    // shared settings: { name } (the greeting name)
  *   city,        // { name, admin, lat, lon }
+ *   system: { temp, storage: { used, total }, memory: { used, total }, bootAt, powerCuts: [{ from, to }], wifi: [{ name, vendor, known, since }],
+ *             malware: { clean, checkedAt }, adb: { unknown, checkedAt }, update },   // the projector's own stats (simulated until Phase 1)
  *   weather: { live, cond, temp, hum, feels, hi, lo, night, sunrise: Date, sunset: Date,
  *              hourly: [{ time: Date, temp, cond, night, pop }] },   // next 24 h from this hour, pop = rain chance %
  *   devices: { laptop, phone, phoneSince: Date | null, mic, cam },  // which devices are on the network (simulated
@@ -146,6 +148,10 @@ const util = {
       const k = c.clientWidth / c.scrollWidth;
       if (k < 1) c.style.setProperty('--fit', Math.max(.5, k * .97));
     }
+  },
+  ago(t) {
+    const s = Math.max(0, (Date.now() - +t) / 1000);
+    return s < 60 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago';
   },
   fmtTime(d, h24) {
     const h = d.getHours(), m = pad(d.getMinutes());
@@ -255,6 +261,8 @@ function autoMode(w) {
   const r = w.w / w.h;
   return r >= 2.4 ? 'rect' : r < 2.0 ? 'square' : (w.mode === 'rect' ? 'rect' : 'square');
 }
+// widget types that were renamed or split; old saves load as the new one
+const TYPE_RENAMES = { 'alerts-projector': 'projector', 'alerts-security': 'alerts-malware' };
 function normalize() {
   L = migrate(L);
   if (!L || !Array.isArray(L.widgets)) L = copy(DEFAULT_LAYOUT);
@@ -275,6 +283,7 @@ function normalize() {
   }
   L.windowOn = !!L.windowOn;
   for (const w of L.widgets) {
+    if (TYPE_RENAMES[w.type]) w.type = TYPE_RENAMES[w.type];
     if (!sectionOf(w.section)) w.section = main().id;
     const sp = sectionOf(w.section);
     for (const k of ['x', 'y', 'w', 'h']) if (!Number.isFinite(w[k])) w[k] = k === 'w' || k === 'h' ? 240 : 0;
@@ -480,7 +489,7 @@ function buildStage() {
 
 function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
   const ctx = { mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather,
-    devices: devicesNow(), alerts };
+    devices: devicesNow(), alerts, system: systemNow() };
   i.el.className = `wgt w-${i.w.type} ${i.w.mode} ${i.w.anchor}`;
   try {
     if (!i.mounted) { i.m.mount(i.el, ctx); i.mounted = true; }
@@ -665,7 +674,7 @@ function renderGallery(now = timeNow(), weather = weatherNow(now)) {
   $('#gallery').querySelectorAll('.gitem').forEach(b => {
     const m = types[b.dataset.type], el = b.querySelector('.wgt');
     const ctx = { mode: 'square', anchor: 'right', opts: defaultOpts(m), look: DEFAULT_LOOK, now, motion: 'off', settings: S, city: S.city, weather,
-      devices: { laptop: true, phone: false, phoneSince: null, mic: true, cam: false }, alerts: PREVIEW_ALERTS };
+      devices: { laptop: true, phone: false, phoneSince: null, mic: true, cam: false }, alerts: [], system: systemNow() };
     el.className = `wgt w-${m.type} square right`;
     try { if (!el._mounted) { m.mount(el, ctx); el._mounted = true; } m.update(el, ctx); } catch (e) { console.error(`preview "${m.type}" failed:`, e); }
   });
@@ -1131,17 +1140,32 @@ function bindControls() {
 }
 
 /* ---------- alerts: things the system notices (real internet check + sample triggers for the rest) ---------- */
-const SAMPLE_ALERTS = {
-  'net-down': { kind: 'network', level: 'critical', title: 'Offline 3 min', detail: 'No internet (sample)', label: 'Offline' },
-  'net-device': { kind: 'network', level: 'info', title: 'New device on Wi-Fi', detail: 'Galaxy-A52 joined', label: 'New device' },
-  'proj-hot': { kind: 'projector', level: 'warning', title: 'Running hot · 78°C', detail: 'Projector chip temperature', label: 'Hot' },
-  'proj-storage': { kind: 'projector', level: 'warning', title: 'Storage 92% full', detail: 'Projector storage', label: 'Storage' },
-  'proj-power': { kind: 'projector', level: 'info', title: 'Power cut at 2:14 AM', detail: 'Back at 2:31 AM', label: 'Power cut' },
-  'proj-uptime': { kind: 'projector', level: 'info', title: 'Running 14 days', detail: 'A restart would help', label: 'Uptime' },
-  'sec-malware': { kind: 'security', level: 'critical', title: 'Proxy malware is back', detail: 'itvbox · prebuilt · port 9000 · daemon12138', label: 'Malware' },
-  'sec-adb': { kind: 'security', level: 'warning', title: 'New ADB connection', detail: 'Something connected to the debug port', label: 'ADB' }
-};
-const PREVIEW_ALERTS = [Object.assign({ id: 'preview', since: new Date() }, SAMPLE_ALERTS['net-device'])];
+const SAMPLE_ALERTS = { 'net-down': { kind: 'network', level: 'critical', title: 'Offline 3 min', detail: 'No internet (sample)' } };
+
+/* ---------- the projector's own stats (simulated until the Phase 1 projector app reads the real ones) ---------- */
+// The Test buttons on the Devices card force a state on, so every alert can be seen without breaking anything.
+const FORCE = {};
+const TESTS = [['net-down', 'Offline'], ['device', 'New device'], ['hot', 'Hot'], ['storage', 'Storage'], ['memory', 'Memory'],
+  ['uptime', 'Uptime'], ['power', 'Power cut'], ['malware', 'Malware'], ['adb', 'ADB']];
+const BOOT_AT = Date.now() - (3 * 864e5 + 4 * 3600e3), WATCH_AT = Date.now();
+const WIFI = [['Router', 'TP-Link'], ['BearWall projector', 'Rockchip'], ['Laptop', 'Lenovo'], ['Phone', 'Samsung'], ['Smart bulb', 'Tuya'], ['TV box', 'Xiaomi'], ['Printer', 'Epson']];
+function systemNow(now = Date.now()) {
+  const wave = (period, amp) => Math.sin(now / 1000 / period) * amp, f = FORCE;
+  const checked = WATCH_AT + Math.floor((now - WATCH_AT) / 120e3) * 120e3;   // the watchdogs "run" every 2 min
+  return {
+    sample: true,
+    temp: f.hot ? 79 : Math.round(52 + wave(300, 3)),
+    storage: { used: (f.storage ? .93 : .48) * 16e9, total: 16e9 },
+    memory: { used: (f.memory ? .94 : .6 + wave(120, .05)) * 1024e6, total: 1024e6 },
+    bootAt: f.uptime ? now - 15 * 864e5 : BOOT_AT,
+    powerCuts: f.power ? [{ from: now - 32 * 60e3, to: now - 15 * 60e3 }] : [],
+    wifi: WIFI.map(([name, vendor]) => ({ name, vendor, known: true })).concat(f.device ? [{ name: 'Galaxy-A52', vendor: 'Samsung', known: false, since: now - 2 * 60e3 }] : []),
+    malware: { clean: !f.malware, checkedAt: checked },
+    adb: { unknown: f.adb ? 1 : 0, checkedAt: checked },
+    update: upd
+  };
+}
+
 function setAlert(id, a) {
   const old = alerts.find(x => x.id === id);
   if (old && old.level === a.level && old.title === a.title && old.detail === a.detail) return;
@@ -1209,12 +1233,13 @@ function bindDevices() {
       saveDevices(); render();
     };
   }
-  $('#alertTest').innerHTML = Object.entries(SAMPLE_ALERTS).map(([id, a]) => `<button class="btn quiet" data-id="${id}" title="${esc(a.title)}">${esc(a.label)}</button>`).join('');
-  $('#alertTest').onclick = e => {
+  $('#alertTest').innerHTML = TESTS.map(([id, label]) => `<button class="btn quiet" data-id="${id}">${esc(label)}</button>`).join('');
+  $('#alertTest').onclick = e => {   // each button turns one test state on or off
     const b = e.target.closest('button'); if (!b) return;
     const id = b.dataset.id;
-    if (alerts.some(x => x.id === id)) clearAlert(id); else setAlert(id, SAMPLE_ALERTS[id]);
-    document.querySelectorAll('#alertTest button').forEach(x => x.classList.toggle('on', alerts.some(a => a.id === x.dataset.id)));
+    if (SAMPLE_ALERTS[id]) { if (alerts.some(x => x.id === id)) clearAlert(id); else setAlert(id, SAMPLE_ALERTS[id]); }
+    else { FORCE[id] = !FORCE[id]; render(); }
+    document.querySelectorAll('#alertTest button').forEach(x => x.classList.toggle('on', !!FORCE[x.dataset.id] || alerts.some(a => a.id === x.dataset.id)));
   };
   $('#updBtn').onclick = () => { if (upd.sha) { store.set('installed', upd.sha); location.reload(); } };
   window.addEventListener('online', checkNet);
