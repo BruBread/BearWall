@@ -31,6 +31,14 @@ The prototype already uses the layout shape that `layout.json` will use:
 
 Coordinates are wall pixels. `quad` is optional. It holds the widget's 4 corners on the wall, in the order top-left, top-right, bottom-left, bottom-right. When it's set, the widget's flat `w` × `h` content is warped onto those corners.
 
+## Sections
+
+- A **section** is an area of the projected picture, one for each surface the projector reaches. The base section, "Wall", always covers the whole picture.
+- A section can be warped onto its surface with its 4 corners (hold Shift). Its widgets lay out flat inside it and bend with it. A widget can still have its own warp on top.
+- **Double-click** a section to go inside it: the preview shows it flat and as large as fits, so you can place its widgets without the warp in the way.
+- Each section has a **background**: None, or a registered background such as **Window**. The Window button above the wall turns Window mode on: window sections show the live sky and hide their widgets, while other sections keep theirs.
+- Layout shape: `{ windowOn, sections: [{ id, name, x, y, w, h, quad?, bg, bgOpts }], widgets: [{ ..., section }] }`. A widget's coordinates are in its section's own flat space.
+
 ## Warping onto a real wall
 
 The projector doesn't hit the wall square-on, so **each widget gets its own 4-corner warp**.
