@@ -911,8 +911,12 @@ function toggleWindow() {
     if (!first || !s) return;
     s.bg = first; s.bgOpts = Object.assign(defaultOpts(bgTypes[first]), s.bgOpts);
   }
-  L.windowOn = !L.windowOn; saveLayout(); render();
+  const flip = () => { L.windowOn = !L.windowOn; saveLayout(); render(); };
+  // the control page of a projector just saves: the wall plays the blinds when the layout reaches it
+  if (!window.BearWallIntro || (ON_PROJECTOR && !WALL_ONLY)) return flip();
+  BearWallIntro.blinds(stage, windowSids(L), flip, S.motion);
 }
+const windowSids = l => l.sections.filter(s => s.bg !== 'none' && bgTypes[s.bg]).map(s => s.id);
 
 /* ---------- photos: shrunk on the way in, kept in this browser (IndexedDB) until the projector app stores them ---------- */
 const photoDB = ON_PROJECTOR ? {   // on the projector, photos are uploaded to the app
@@ -1326,7 +1330,12 @@ function bindDevices() {
   };
   $('#updBtn').onclick = async () => {
     if (!upd.sha) return;
-    if (!ON_PROJECTOR) { store.set('installed', upd.sha); location.reload(); return; }
+    if (!ON_PROJECTOR) {
+      store.set('installed', upd.sha);
+      onUpdating('download');
+      setTimeout(() => onUpdating('install'), 2200); setTimeout(() => onUpdating('restart'), 3400); setTimeout(() => location.reload(), 4300);
+      return;
+    }
     const b = $('#updBtn');
     b.disabled = true; b.textContent = 'Updating…';   // the app downloads the new web files from GitHub; every page reloads
     try {
@@ -1407,13 +1416,22 @@ function selfTest() {
   ok(!m.warp && m.widgets[0].x === 108 && m.widgets[0].y === 66, 'old screen layouts fold onto one wall', m);
 }
 
+const UPD_TEXT = { download: 'Downloading the update…', install: 'Installing…', restart: 'Restarting…', failed: 'Update failed · bringing the wall back' };
+let updatingNow = false;
+function onUpdating(st) {
+  if (!window.BearWallIntro) return;
+  updatingNow = st !== 'failed';
+  BearWallIntro.updating(stage, UPD_TEXT[st] || st, S.motion, { corners: secCorners });
+  if (st === 'failed') setTimeout(() => { BearWallIntro.cancel(); buildStage(); playIntro(); }, 3000);
+}
 /* ---------- public API ---------- */
 let booted = false;
 // the app tells pages when the other side saved something ("kv:layout:<client>") or after an update ("reload")
 function listen() {
   const es = new EventSource('/api/events');
   es.onmessage = e => {
-    if (e.data === 'reload') return location.reload();
+    if (e.data === 'reload') return updatingNow ? setTimeout(() => location.reload(), 900) : location.reload();   // let "Restarting" show
+    if (e.data.startsWith('updating:')) return WALL_ONLY && onUpdating(e.data.slice(9));
     if (e.data.startsWith('live:')) {   // live:<client>:<json>
       const rest = e.data.slice(5), json = rest.slice(rest.indexOf(':') + 1);
       try { remote = JSON.parse(json) || {}; } catch (err) { remote = {}; }
@@ -1431,7 +1449,17 @@ function listen() {
 }
 // a layout from the other side: if only positions, sizes or looks changed, move things in place (smooth while
 // someone drags); anything structural rebuilds the wall
+let winNext = null;
 function applyLayout(next) {
+  if (winNext) { winNext = next; return; }
+  if (!!next.windowOn !== !!L.windowOn && window.BearWallIntro) {
+    winNext = next;
+    BearWallIntro.blinds(stage, windowSids(next), () => { const n = winNext; winNext = null; applyNow(n); }, S.motion);
+    return;
+  }
+  applyNow(next);
+}
+function applyNow(next) {
   const shape = l => JSON.stringify([l.windowOn, l.sections.map(s => [s.id, s.bg, s.bgOpts]), l.widgets.map(w => [w.id, w.type, w.section, w.mode, w.anchor, w.when, w.opts])]);
   const before = shape(L);
   L = next; normalize();

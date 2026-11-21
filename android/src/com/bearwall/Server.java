@@ -33,7 +33,7 @@ import java.util.zip.ZipInputStream;
  * BearWall's web server on port 8080 (plain Java sockets, no libraries). One request per connection.
  *   GET  /wall, /control       the page (the projector shows /wall; your laptop opens /control)
  *   GET/PUT /api/kv/{key}      saved state: layout, settings, devices, installed (JSON files)
- *   GET  /api/events           Server-Sent Events: "kv:{key}:{client}" after a save, "reload" after an update
+ *   GET  /api/events           Server-Sent Events: "kv:{key}:{client}" after a save, "updating:{stage}" during an update, "reload" after it
  *   GET  /api/system           the projector's stats (Health.java)
  *   GET  /api/proxy?url=       fetches news / storm feeds for the page (only the hosts listed in PROXY_HOSTS)
  *   PUT/GET/DELETE /api/photos/{id}   uploaded photos
@@ -232,8 +232,18 @@ class Server {
             return false;
         }
         if (path.equals("/api/update") && m.equals("POST")) {
-            try { update(); reply(out, 200, "application/json", "{\"ok\":true}"); send("data: reload\n\n"); }
-            catch (Exception e) { Log.w(TAG, "update failed", e); reply(out, 502, "application/json", "{\"ok\":false}"); }
+            // the wall shows each stage on its "Updating" screen: download, install, restart (then reload), or failed
+            send("data: updating:download\n\n");
+            try {
+                update();
+                send("data: updating:restart\n\n");
+                reply(out, 200, "application/json", "{\"ok\":true}");
+                send("data: reload\n\n");
+            } catch (Exception e) {
+                Log.w(TAG, "update failed", e);
+                send("data: updating:failed\n\n");
+                reply(out, 502, "application/json", "{\"ok\":false}");
+            }
             return false;
         }
         // static files, never outside the web folder
@@ -293,6 +303,7 @@ class Server {
             }
         }
         if (files == 0 || !new File(tmp, "index.html").exists()) throw new IOException("the download had no prototype/index.html");
+        send("data: updating:install\n\n");
         swapIn(tmp);
     }
 
