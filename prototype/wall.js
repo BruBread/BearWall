@@ -423,6 +423,7 @@ const quadOf = t => t.quad || rectPts(t.x, t.y, t.w, t.h);
 const secEl = s => wallEl.querySelector(`.section[data-sid="${s.id}"]`);
 const widEl = w => wallEl.querySelector(`.widget[data-wid="${w.id}"]`);
 const windowed = s => L.windowOn && s.bg !== 'none' && !!bgTypes[s.bg];
+const winOff = s => L.windowOn && !windowed(s);   // Window mode switches every other section off
 
 // el lays out at BASE px on its shorter side and zooms to W x H, so every widget size is the same layout, scaled
 const BASE = 264;
@@ -465,6 +466,7 @@ function positionSection(s) {
   el.classList.toggle('warped', !!s.quad && inside !== s.id);
   el.classList.toggle('is-inside', inside === s.id);
   el.classList.toggle('win-on', windowed(s));
+  el.classList.toggle('win-off', winOff(s));
   el.dataset.label = s.name + (windowed(s) ? ' · window' : '');
   const pw = stage.clientWidth, ph = stage.clientHeight;
   el.style.zoom = '';
@@ -581,7 +583,7 @@ function render() {
   bgInst.forEach(i => updateBg(i, now, weather));
   // Show when: hidden in View, faint while arranging (see style.css)
   inst.forEach(i => { const el = widEl(i.w); if (el) el.classList.toggle('off', !shownNow(i.w)); });
-  L.sections.forEach(s => { const el = secEl(s); if (el) { el.classList.toggle('win-on', windowed(s)); el.dataset.label = s.name + (windowed(s) ? ' · window' : ''); } });
+  L.sections.forEach(s => { const el = secEl(s); if (el) { el.classList.toggle('win-on', windowed(s)); el.classList.toggle('win-off', winOff(s)); el.dataset.label = s.name + (windowed(s) ? ' · window' : ''); } });
   renderGallery(now, weather);
   renderControls();
 }
@@ -914,7 +916,11 @@ function toggleWindow() {
   const flip = () => { L.windowOn = !L.windowOn; saveLayout(); render(); };
   // the control page of a projector just saves: the wall plays the blinds when the layout reaches it
   if (!window.BearWallIntro || (ON_PROJECTOR && !WALL_ONLY)) return flip();
-  BearWallIntro.blinds(stage, windowSids(L), flip, S.motion);
+  blindsFor(L, !L.windowOn, flip);
+}
+function blindsFor(l, turningOn, flip) {
+  const all = l.sections.map(s => s.id);
+  BearWallIntro.blinds(stage, all, flip, S.motion, turningOn ? windowSids(l) : all);
 }
 const windowSids = l => l.sections.filter(s => s.bg !== 'none' && bgTypes[s.bg]).map(s => s.id);
 
@@ -1482,7 +1488,7 @@ function applyLayout(next) {
   if (winNext) { winNext = next; return; }
   if (!!next.windowOn !== !!L.windowOn && window.BearWallIntro) {
     winNext = next;
-    BearWallIntro.blinds(stage, windowSids(next), () => { const n = winNext; winNext = null; applyNow(n); }, S.motion);
+    blindsFor(next, !!next.windowOn, () => { const n = winNext; winNext = null; applyNow(n); });
     return;
   }
   applyNow(next);

@@ -145,7 +145,7 @@
 
   function play(stage, motion, opts) {
     cleanup();
-    const t = T[motion], sections = stage ? [...stage.querySelectorAll('.section')] : [];
+    const t = T[motion], sections = stage ? [...stage.querySelectorAll('.section:not(.win-off)')] : [];
     if (!t || !sections.length) return Promise.resolve();
     css();
     return new Promise(done => {
@@ -156,7 +156,7 @@
   }
 
   function start(stage, t, opts) {
-    const sections = [...stage.querySelectorAll('.section')];
+    const sections = [...stage.querySelectorAll('.section:not(.win-off)')];
     if (t.fade) {   // calm: a gentle fade, nothing else
       const widgets = order([...stage.querySelectorAll('.widget')], stage.clientHeight), gap = Math.min(t.wid, 900 / Math.max(1, widgets.length));
       widgets.forEach((el, i) => anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: t.fade, delay: i * gap, fill: 'backwards' }));
@@ -211,16 +211,18 @@
     if (!b.flipped) b.flip();   // never leave the toggle half done
     b.done();
   }
-  // flip() changes the scene (it may rebuild the sections), so the slats are found again by section id after it
-  function blinds(stage, sids, flip, motion) {
+  // Blinds close over the sections in sids, flip() swaps the scene, then they open over openSids (default: the same).
+  // A closed section left out of openSids stays as flip() leaves it (Window mode switches it off).
+  // flip() may rebuild the sections, so the slats are found again by section id after it.
+  function blinds(stage, sids, flip, motion, openSids) {
     endBlinds();
-    const t = BL[motion];
+    const t = BL[motion], reopen = openSids || sids;
     if (!t || !stage || !sids.length) { flip(); return Promise.resolve(); }
     css();
     return new Promise(done => {
       const b = blindsRun = { timers: [], anims: [], nodes: [], flip, flipped: false, done };
-      const secs = () => [...stage.querySelectorAll('.section')].filter(e => sids.indexOf(e.dataset.sid) >= 0);
-      const put = closing => secs().forEach(sec => {
+      const secs = ids => [...stage.querySelectorAll('.section')].filter(e => ids.indexOf(e.dataset.sid) >= 0);
+      const put = closing => secs(closing ? sids : reopen).forEach(sec => {
         const box = document.createElement('div');
         box.className = 'bw-blinds';
         box.innerHTML = '<i></i>'.repeat(t.n);

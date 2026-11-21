@@ -79,6 +79,9 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 .gallery.off { opacity: .35; pointer-events: none; }
 .sbg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .section.win-on > .widget { display: none; }
+/* Window mode switches the other sections off: gone on the real wall, faded on the control page so they stay editable */
+.wallmode .section.win-off { visibility: hidden; }
+.section.win-off > .widget, .section.win-off > .sbg { opacity: .25; }
 .stage.sel-on .section { outline: 2px dashed var(--c); outline-offset: -1px; cursor: pointer; }
 .stage.sel-on .section::before { content: attr(data-label); position: absolute; z-index: 3; left: 4px; top: 4px; font: 800 clamp(10px, 1.1vw, 13px) var(--ui); white-space: nowrap; padding: 3px 9px; border-radius: 7px; background: #000d; color: var(--c); border: 1px solid var(--c); }
 .stage .section.sel { outline-style: solid; cursor: move; }
