@@ -81,7 +81,8 @@ class Server {
     /* ---------- the web files: the APK carries a copy; a newer APK replaces it, "Update projector" too ---------- */
     void installBundledWeb() {
         try {
-            String vc = String.valueOf(c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionCode);
+            // every install (even with the same version number) brings fresh web files: key them to the install time
+            String vc = String.valueOf(c.getPackageManager().getPackageInfo(c.getPackageName(), 0).lastUpdateTime);
             File mark = new File(c.getFilesDir(), "apk.version");
             if (web.isDirectory() && vc.equals(Files.read(mark, "").trim())) return;
             File tmp = new File(c.getFilesDir(), "web.new");
