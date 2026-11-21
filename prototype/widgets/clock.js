@@ -35,7 +35,7 @@ const LINES = '<div class="sm fit"></div><div class="dt fit"></div><div class="t
 const TIME = `<div class="tx"><div class="big fit"><span class="hh"></span><span class="co">:</span><span class="mm"></span></div>${LINES}</div>`;
 // Split-flap card: static top shows the new digit, static bottom the old one until the bottom flap lands on it.
 const CARD = '<span class="cd"><span class="up"><b></b></span><span class="dn"><b></b></span><span class="fu"><b></b></span><span class="fd"><b></b></span></span>';
-const FLIP = `<div class="fl"><div class="cards">${CARD}${CARD}<span class="cs co">:</span>${CARD}${CARD}<span class="ss">${CARD}${CARD}</span></div><div class="ln">${LINES}</div></div>`;
+const FLIP = `<div class="fl"><div class="cards">${CARD}${CARD}<span class="cs co">:</span>${CARD}${CARD}<span class="ss"><span class="cs sx">:</span>${CARD}${CARD}</span></div><div class="ln">${LINES}</div></div>`;
 
 function build(style, mode) {
   if (style === 'word') return mode === 'square'
@@ -154,8 +154,11 @@ BearWall.register({
 
     /* flip: split-flap cards sized from --cw (card width in --u) */
     .w-clock .fl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; --cw: 19; }
-    .w-clock .fl.sec { --cw: 14; }
-    .w-clock .fl .ss { --cw: 8; display: flex; gap: calc(var(--u) * .8); margin-left: calc(var(--u) * 1.5); }
+    .w-clock .fl.sec { --cw: 11; }
+    /* seconds: same size cards as hours and minutes, dimmer, after a gap and a small colon */
+    .w-clock .fl .ss { display: flex; align-items: center; gap: calc(var(--u) * 1.2); margin-left: calc(var(--u) * 1.6); }
+    .w-clock .fl .ss .cd { opacity: .5; }
+    .w-clock .fl .ss .sx { font-size: calc(var(--u) * var(--cw) * .7); opacity: .5; }
     .w-clock .cards { display: flex; align-items: center; gap: calc(var(--u) * 1.2); }
     .w-clock .cs { font-size: calc(var(--u) * var(--cw) * 1.1); font-weight: 800; text-shadow: 0 0 calc(var(--glow) * var(--u) * 3) currentColor; }
     .w-clock .cd { position: relative; flex: none; width: calc(var(--u) * var(--cw)); height: calc(var(--u) * var(--cw) * 1.5);
@@ -179,8 +182,7 @@ BearWall.register({
     .w-clock .ln { width: 100%; text-align: center; margin-top: calc(var(--u) * 3); }
     .w-clock.square .ln .sm { font-size: calc(var(--u) * 6.5 * var(--fit, 1)); }
     .w-clock.rect .fl { flex-direction: row; justify-content: flex-start; gap: calc(var(--u) * 10); --cw: 52; }
-    .w-clock.rect .fl.sec { --cw: 44; }
-    .w-clock.rect .fl .ss { --cw: 28; }
+    .w-clock.rect .fl.sec { --cw: 36; }
     .w-clock.rect.right .fl { flex-direction: row-reverse; }
     .w-clock.rect .ln { flex: 1 1 0; min-width: 0; margin: 0; text-align: left; }
     .w-clock.rect.right .ln { text-align: right; }
