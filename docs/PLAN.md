@@ -19,6 +19,7 @@ This is the design for BearWall: what it does, the decisions behind it, and the 
 - Every widget has two modes:
   - **Square:** spread out.
   - **Rectangle:** one row, for corners. Its anchor (left or right) mirrors the order so it hugs the corner.
+- **Shape is automatic:** a widget becomes the one-row rectangle once it's at least 2.4x wider than tall and goes back to square below 2.0x.
 - **Text never overlaps** other parts of a widget. It shrinks to fit down to 50%, then gets an ellipsis.
 
 The prototype already uses the layout shape that `layout.json` will use:
@@ -33,7 +34,7 @@ Coordinates are wall pixels. `quad` is optional. It holds the widget's 4 corners
 
 ## Sections
 
-- A **section** is an area of the projected picture, one for each surface the projector reaches. The base section, "Wall", always covers the whole picture.
+- A **section** is an area of the projected picture, one for each surface the projector reaches. There's no built-in section: the wall starts empty, you draw sections (drag on empty wall or press Add section), and every widget lives in one. Deleting a section deletes its widgets (after a second tap).
 - A section can be warped onto its surface with its 4 corners (hold Shift). Its widgets lay out flat inside it and bend with it. A widget can still have its own warp on top.
 - **Double-click** a section to go inside it: the preview shows it flat and as large as fits, so you can place its widgets without the warp in the way.
 - Each section has a **background**: None, or a registered background such as **Window**. The Window button above the wall turns Window mode on: window sections show the live sky and hide their widgets, while other sections keep theirs.
