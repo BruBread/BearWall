@@ -10,7 +10,7 @@ Planning is done and the interactive prototype works. Phase 1 (the real app on t
 
 ## Try the prototype
 
-Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need a build step or a server.
+Double-click [`BearWall.bat`](BearWall.bat), or open [`prototype/index.html`](prototype/index.html) in a browser. You don't need a build step or a server. Once the projector app exists, put its address in `local.json` (copy [`local.example.json`](local.example.json)) and `BearWall.bat` opens the projector's control page instead.
 
 - **The wall:** the black 16:9 box shows exactly what the projector would show. **Fullscreen** shows it the way it looks on the wall.
 - **Click a widget** to move it or drag its corners to resize it. Everything snaps to an 8 px grid on a 1280 × 720 wall. **Click empty wall** to see it clean, exactly as the projector shows it.
@@ -20,6 +20,9 @@ Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need
   - Undo with Ctrl+Z, and flatten the widget back to a plain rectangle with Ctrl+R.
 - **Widgets:** two families, each with a Style row. **Weather** has Now and Hourly. **Clock** has Digital, Flip, Analog, Words, Date (with day, week, month or year progress) and Sun & moon. Every widget has a square mode and a one-row rectangle mode for corners, plus its own settings.
 - **Adding widgets:** pick one from the gallery of live previews under Motion.
+- **Alerts:** invisible until something matters, then they pulse or flash. Network checks the real internet connection. Projector (temperature, storage, power cuts), Security (the proxy malware coming back, new ADB connections) and Update available use sample alerts you can fire from the Devices card until the projector app exists.
+- **Phase 2 preview:** the Devices card pretends your laptop or phone joined the Wi-Fi. Each widget has a **Show when** setting (always, laptop connected, phone connected), so you can design the wall for each case. The **PC** family (Now playing, PC stats, On Air) uses sample data until the PC agent exists, and the phone connecting shows "Welcome home".
+- **Update projector:** checks this GitHub repo for new commits and offers an update.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
 - **Look:** the Look card (under Warp) sets the selected widget's own ring, text and secondary text colors with a full color picker or presets, plus ring thickness, track brightness, glow and icon colors (natural, white, ring color or any custom color). **Motion** (Full, Lite, Calm, Off) applies to every widget.
 
