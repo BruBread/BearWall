@@ -44,7 +44,7 @@ The projector doesn't hit the wall square-on, so **each widget gets its own 4-co
   - Drag inside to move the widget.
   - Scroll or pinch to zoom.
 - **Fine control:** nudge one corner by 1 px with Shift + arrows, and pick it with 1–4. Ctrl+Z undoes, and Ctrl+R flattens the widget back to a plain rectangle.
-- **Page layout:** Motion sits left of the wall preview and Warp sits right of it. Those are the only settings shared by every widget. Everything else, including each widget's look, belongs to that widget.
+- **Page layout:** left of the wall preview are Motion and Add a widget. Right of it are Warp and the selected widget's Look: ring, text and secondary text colors (color picker or presets), ring thickness, track, glow, and icon colors including a custom color. Motion is the only look setting shared by every widget.
 - **Phone:** the phone control design comes later.
 - **Arrange on a warped widget** moves its whole shape on the 8 px grid.
 - **How it's drawn:** the widget lays out flat at its own size, and a CSS `matrix3d` homography maps it onto its corners. The GPU does this natively, and Chrome 95 supports it. Widgets don't know they're warped.

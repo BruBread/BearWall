@@ -19,9 +19,9 @@ Open [`prototype/index.html`](prototype/index.html) in a browser. You don't need
   - Nudge a corner 1 px with Shift + arrows, and pick it with 1–4.
   - Undo with Ctrl+Z, and flatten the widget back to a plain rectangle with Ctrl+R.
 - **Widgets:** weather, clock (digital, flip, analog, word clock), date with progress, sun and moon, and hourly forecast. Each has a square mode and a one-row rectangle mode for corners, plus its own settings.
-- **Adding and changing widgets:** pick one from the gallery of live previews to add it, or use **Change to** to swap a widget's type while keeping its spot, size, look and warp.
+- **Adding widgets:** pick one from the gallery of live previews under Motion.
 - **Weather:** live weather from [Open-Meteo](https://open-meteo.com/) (free, no API key), with a city search. Switch to **Sample** to preview any condition or time of day.
-- **Look:** every widget has its own ring color, thickness, track brightness, glow and icon colors. **Motion** (Full, Lite, Calm, Off) applies to all of them.
+- **Look:** the Look card (under Warp) sets the selected widget's own ring, text and secondary text colors with a full color picker or presets, plus ring thickness, track brightness, glow and icon colors (natural, white, ring color or any custom color). **Motion** (Full, Lite, Calm, Off) applies to every widget.
 
 The prototype saves your layout and settings in your browser's local storage.
 
