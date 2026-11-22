@@ -118,6 +118,10 @@
             <select class="field" id="wSection" aria-label="Section this widget lives in"></select>
           </div>
           <div class="tabs" id="wWhen"><button data-v="always">Always</button><button data-v="laptop">Laptop connected</button><button data-v="phone">Phone connected</button></div>
+          <div id="wRotRow" hidden>
+            <div class="lbl"><span>Rotation</span><span id="wRotVal">0°</span></div>
+            <div class="rotrow"><input type="range" id="wRot" min="-180" max="180" step="1" aria-label="Rotation"><button class="btn quiet" id="wRotReset">Reset</button></div>
+          </div>
           <div id="wLayerRow" hidden>
             <div class="lbl"><span>Layer</span><span class="kbd">Ctrl+] / Ctrl+[</span></div>
             <div class="tabs wrap" id="wLayer"><button data-v="back">To back</button><button data-v="backward">Backward</button><button data-v="forward">Forward</button><button data-v="front">To front</button></div>
@@ -229,6 +233,7 @@
 <script src="lights.js"></script>
 <script src="widgets/lights.js"></script>
 <script src="widgets/dynamic.js"></script>
+<script src="widgets/pages.js"></script>
 <script src="draw.js"></script>
 <script src="sounds.js"></script>
 <script src="sound.js"></script>

@@ -137,6 +137,10 @@ body.drawing .stage-box { cursor: crosshair; }
 .widget.sel.warped > .handle, .widget.warping > .handle { display: none; }
 .handle[data-h=nw] { left: -9px; top: -9px; cursor: nwse-resize; } .handle[data-h=se] { right: -9px; bottom: -9px; cursor: nwse-resize; }
 .handle[data-h=ne] { right: -9px; top: -9px; cursor: nesw-resize; } .handle[data-h=sw] { left: -9px; bottom: -9px; cursor: nesw-resize; }
+.handle[data-h=rot] { left: 50%; top: -34px; margin-left: -7px; cursor: grab; background: var(--c); }   /* drag to rotate (Shift: 15° steps) */
+.handle[data-h=rot]::after { content: ''; position: absolute; left: 6px; top: 14px; width: 2px; height: 20px; background: var(--c); }
+.section > .handle[data-h=rot] { display: none !important; }   /* sections warp instead */
+.rotrow { display: flex; align-items: center; gap: 8px; } .rotrow input { flex: 1; }
 
 /* Warp = Shift held (or the Warp handles switch): an alignment grid inside the widget that bends with it */
 :root { --lt: #ff3c3c; --rt: #3cdc3c; --lb: #3c8cff; --rb: #ffd23c; }

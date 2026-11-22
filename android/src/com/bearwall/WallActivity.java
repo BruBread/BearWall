@@ -174,6 +174,18 @@ public class WallActivity extends Activity {
         } else wv.evaluateJavascript("window.BearWallSound && BearWallSound.volKey('" + key + "')", null);
     }};
 
+    static String remoteKey(int k) {
+        switch (k) {
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "left";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "right";
+            case KeyEvent.KEYCODE_DPAD_UP: return "up";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "down";
+            case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER: return "ok";
+            case KeyEvent.KEYCODE_BACK: return "back";
+            default: return null;
+        }
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
@@ -194,9 +206,12 @@ public class WallActivity extends Activity {
                 return true;
             }
         }
-        // OK (outside Light mode): the debrief, BearWall runs through the day out loud
-        if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) {
-            if (down && e.getRepeatCount() == 0) wv.evaluateJavascript("window.BearWall && BearWall.debrief && BearWall.debrief('button')", null);
+        // outside Light mode the arrows, OK and BACK drive the Main Dynamic's pages (Timer · Home · Update; OK on Home = the debrief).
+        // Arrows repeat while held (the Timer speeds up); OK and BACK act once per press.
+        String nav = remoteKey(k);
+        if (nav != null) {
+            if (down && (e.getRepeatCount() == 0 || !(nav.equals("ok") || nav.equals("back"))))
+                wv.evaluateJavascript("window.BearWall && BearWall.remote && BearWall.remote('" + nav + "', " + (e.getRepeatCount() > 0) + ")", null);
             return true;
         }
         if (k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_SETTINGS) {

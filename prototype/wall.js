@@ -346,6 +346,7 @@ function normalize() {
       delete w.quad; fitInside(w, sp.w, sp.h);
     }
     if (w.type === 'drawing') Object.assign(w, { x: 0, y: 0, w: sp.w, h: sp.h });   // a section's drawing covers the whole section
+    w.rot = w.type === 'drawing' || !Number.isFinite(+w.rot) ? 0 : normRot(+w.rot);
     w.mode = autoMode(w);
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
     w.when = ['laptop', 'phone'].includes(w.when) ? w.when : 'always';
@@ -416,7 +417,7 @@ async function fetchWeather() {
 // inside it: it fills the preview flat, so you can place its widgets without the warp in the way.
 let stage, stageBox, wallEl, inst = [], bgInst = [];
 let inside = null;                         // id of the section you're inside, or null
-const HANDLES = ['nw', 'ne', 'sw', 'se'].map(h => `<i class="handle" data-h="${h}"></i>`).join('');
+const HANDLES = ['nw', 'ne', 'sw', 'se', 'rot'].map(h => `<i class="handle" data-h="${h}"></i>`).join('');
 const selW = () => (sel && widgetOf(sel)) || null;
 const selS = () => (selSec && sectionOf(selSec)) || null;
 const target = () => selW() || selS();     // what's selected: a widget or a section
@@ -497,6 +498,7 @@ function positionWidget(w) {
   if (!el || !s) return;
   if (w.type === 'drawing') Object.assign(w, { x: 0, y: 0, w: s.w, h: s.h });   // follows its section when that's resized
   place(el, w, s.w, s.h);
+  el.style.transform = w.rot ? `rotate(${w.rot}deg)` : '';   // around its center, in the section's flat space (then the section warps)
   el.dataset.label = types[w.type].name;
   applyLook(w, el);
 }
@@ -594,7 +596,7 @@ function render() {
 }
 // everything that depends on the selection, without re-rendering the widgets
 function renderChrome() {
-  stage.className = `stage m-${S.motion}` + (S.sharp ? ' sharp' : '') + (target() || inside ? ' sel-on' : '') + (inside ? ' inside' : '');
+  stage.className = `stage m-${S.motion}` + (S.sharp ? ' sharp' : '') + (target() || inside ? ' sel-on' : '') + (inside ? ' inside' : '') + (focusOn ? ' bw-focus' : '');
   stageBox.classList.toggle('editing', !!target() || !!inside);
   wallEl.querySelectorAll('.section.sel').forEach(el => el.classList.remove('sel'));
   const s = selS();
@@ -695,6 +697,7 @@ function renderSel() {
   $('#widgetTools').hidden = !sel;
   renderLook(sel ? w : null);
   renderLayers();
+  renderRot();
   if (sel) {
     onTabs('wAnchor', w.anchor); onTabs('wWhen', w.when);
     $('#anchorRow').hidden = w.mode !== 'rect';
@@ -837,13 +840,36 @@ function addWidget(type) {
   const w = { id: uid(), type, section: s.id, mode: 'square', anchor: 'right', when: m.when || 'always', x: snap((s.w - w0) / 2), y: snap((s.h - h0) / 2), w: w0, h: h0, opts: defaultOpts(m), look: copy(DEFAULT_LOOK) };
   fitInside(w, s.w, s.h);
   w.x = Math.max(0, w.x); w.y = Math.max(0, w.y);
-  L.widgets.push(w); sel = w.id; selSec = null; saveLayout(); buildStage();
+  L.widgets.push(w); saveLayout(); buildStage();
+  if (inside !== s.id) enterSection(s.id);   // widgets are edited from inside their section
+  select(w.id);
 }
 // move a widget or section, flat or warped; arrange moves snap to the 8 px grid
 function moveThing(t, start, dx, dy) {
   if (start.quad) return moveAll(t, start.quad, snap(dx), snap(dy));
   const sp = spaceOf(t);
   moveResize(t, start, dx, dy, '', sp.w, sp.h); reposition(t);
+}
+
+/* ---------- rotation: widgets turn around their center inside their section ---------- */
+const normRot = r => { r = Math.round((((r % 360) + 540) % 360 - 180) * 10) / 10; return r === -180 ? 180 : r || 0; };   // -180 < r <= 180
+const snapRot = r => { for (const k of [-180, -90, 0, 90, 180]) if (Math.abs(r - k) <= 3) return k; return r; };
+// where a point of a rotated box ends up on the wall
+const turnPt = (b, rot, [x, y]) => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2, c = Math.cos(rot), s = Math.sin(rot);
+  return [cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c]; };
+// a resized rotated widget: shift it so the corner (or side) opposite the handle stays put
+function keepAnchor(t, b0, dir, rot) {
+  const pt = b => [dir.includes('w') ? b.x + b.w : dir.includes('e') ? b.x : b.x + b.w / 2, dir.includes('n') ? b.y + b.h : dir.includes('s') ? b.y : b.y + b.h / 2];
+  const before = turnPt(b0, rot, pt(b0)), after = turnPt(t, rot, pt(t));
+  t.x += before[0] - after[0]; t.y += before[1] - after[1];
+}
+function renderRot() {
+  const w = selW(), row = $('#wRotRow');
+  if (!row) return;
+  row.hidden = !w || w.type === 'drawing';
+  if (!w) return;
+  if (document.activeElement !== $('#wRot')) $('#wRot').value = w.rot || 0;
+  $('#wRotVal').textContent = (w.rot || 0) + '°';
 }
 
 /* ---------- layers: the order in the saved lists is the stacking order (later = on top), like Canva ---------- */
@@ -873,7 +899,12 @@ function renderLayers() {
 function bindLayerList() {
   const box = $('#layerList');
   let dragId = null;
-  box.addEventListener('click', e => { const r = e.target.closest('.lyr'); if (r) select(r.dataset.wid); });
+  box.addEventListener('click', e => {
+    const r = e.target.closest('.lyr'), w = r && widgetOf(r.dataset.wid);
+    if (!w) return;
+    if (inside !== w.section) enterSection(w.section);   // widgets are picked from inside their section
+    select(w.id);
+  });
   box.addEventListener('dragstart', e => { const r = e.target.closest('.lyr'); dragId = r && r.dataset.wid; if (dragId) e.dataTransfer.effectAllowed = 'move'; });
   box.addEventListener('dragover', e => { if (dragId) e.preventDefault(); });
   box.addEventListener('drop', e => {   // dropped on a row: take that row's place in the stack
@@ -1091,7 +1122,7 @@ function bindStage() {
     const f = hh && hh.parentElement.classList.contains('widget') ? hh.parentElement : up('.widget');
     const sf = hh && hh.parentElement.classList.contains('section') ? hh.parentElement : up('.section');
     let thing;
-    if (f && (!inside || sectionOf(inside).id === widgetOf(f.dataset.wid).section)) { select(f.dataset.wid); thing = selW(); }
+    if (f && inside && inside === widgetOf(f.dataset.wid).section) { select(f.dataset.wid); thing = selW(); }   // outside, widgets aren't clickable
     else if (sf && (!inside || inside === sf.dataset.sid)) { if (inside) { select(null); return; } selectSection(sf.dataset.sid); thing = selS(); }
     else {   // empty wall: View. Dragging here draws a new section.
       sel = null; selSec = null; renderChrome();
@@ -1101,7 +1132,8 @@ function bindStage() {
     const h = e.target.closest('.handle');
     const owner = h && (h.parentElement.dataset.wid || h.parentElement.dataset.sid);
     if (thing.quad) pushUndo(null, thing);
-    drag = { kind: h && owner === thing.id && !thing.quad ? 'resize' : 'move', t: thing, start: copy(thing), l0: toSpace(thing, p), dir: h ? h.dataset.h : '' };
+    const kind = h && owner === thing.id && !thing.quad ? (h.dataset.h === 'rot' ? 'rotate' : 'resize') : 'move';
+    drag = { kind, t: thing, start: copy(thing), l0: toSpace(thing, p), dir: h ? h.dataset.h : '' };
     stageBox.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
@@ -1117,13 +1149,23 @@ function bindStage() {
     if (drag.kind === 'draw') return drawBox(drag, p);
     const l = toSpace(drag.t, p), dx = l[0] - drag.l0[0], dy = l[1] - drag.l0[1];
     if (drag.kind === 'move') return moveThing(drag.t, drag.start, dx, dy);
+    if (drag.kind === 'rotate') {   // turn around the center; Shift = 15° steps, and it settles on 0/90/180 when close
+      const b = drag.start, c = [b.x + b.w / 2, b.y + b.h / 2], a0 = Math.atan2(drag.l0[1] - c[1], drag.l0[0] - c[0]);
+      let r = (b.rot || 0) + (Math.atan2(l[1] - c[1], l[0] - c[0]) - a0) * 180 / Math.PI;
+      r = shiftHeld ? Math.round(r / 15) * 15 : snapRot(r);
+      drag.t.rot = normRot(r); reposition(drag.t); renderRot();
+      return;
+    }
     if (drag.kind === 'resize') {
-      const sp = spaceOf(drag.t), m = !isSec(drag.t) && types[drag.t.type];
-      if (m && m.keepAspect && !shiftHeld) resizeKeep(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h);
+      const sp = spaceOf(drag.t), m = !isSec(drag.t) && types[drag.t.type], rot = !isSec(drag.t) && drag.t.rot ? drag.t.rot * Math.PI / 180 : 0;
+      let rdx = dx, rdy = dy;
+      if (rot) { rdx = dx * Math.cos(rot) + dy * Math.sin(rot); rdy = -dx * Math.sin(rot) + dy * Math.cos(rot); }   // pull along the widget's own sides
+      if (m && m.keepAspect && !shiftHeld) resizeKeep(drag.t, drag.start, rdx, rdy, drag.dir, sp.w, sp.h);
       else {
-        moveResize(drag.t, drag.start, dx, dy, drag.dir, sp.w, sp.h);
+        moveResize(drag.t, drag.start, rdx, rdy, drag.dir, sp.w, sp.h);
         if (m && m.keepAspect && drag.t.opts.fit !== 'fill') { drag.t.opts.fit = 'fill'; const i = inst.find(x => x.w === drag.t); if (i) updateInst(i); }   // Shift: crop
       }
+      if (rot) keepAnchor(drag.t, drag.start, drag.dir, rot);   // the opposite corner stays where it was on the wall
       reposition(drag.t);
       if (!isSec(drag.t) && autoMode(drag.t) !== drag.t.mode) {   // shape follows the proportions
         drag.t.mode = autoMode(drag.t);
@@ -1161,8 +1203,7 @@ function bindStage() {
     const stack = document.elementsFromPoint(e.clientX, e.clientY), up = cls => stack.map(el => el.closest && el.closest(cls)).find(Boolean);
     const sf = up('.section');
     if (inside) { if (!sf || sf.dataset.sid !== inside) leaveSection(); return; }
-    const wf = up('.widget');
-    if (sf && !(wf && sf.contains(wf))) enterSection(sf.dataset.sid);   // a widget of this section takes the double-click itself
+    if (sf) enterSection(sf.dataset.sid);   // even over one of its widgets: from outside, widgets aren't clickable
   });
   stageBox.addEventListener('wheel', e => {
     const t = selS();
@@ -1205,6 +1246,8 @@ function bindControls() {
   $('#flatten').onclick = () => flatten(selS());
   // widget tools
   $('#del').onclick = deleteSelected;
+  $('#wRot').oninput = e => { const w = selW(); if (!w) return; w.rot = normRot(+e.target.value); positionWidget(w); renderRot(); saveLayout(); };
+  $('#wRotReset').onclick = () => { const w = selW(); if (!w) return; w.rot = 0; positionWidget(w); renderRot(); saveLayout(); };
   for (const id of ['#wLayer', '#sLayer']) $(id).onclick = e => { const b = e.target.closest('button'), t = target(); if (b && t) relayer(t, b.dataset.v); };
   bindLayerList();
   buildGallery();
@@ -1480,24 +1523,30 @@ function bindDevices() {
   $('#devSim').onchange = e => { DEV.simulate = e.target.checked; if (!DEV.simulate) DEV.tests = {}; saveDevices(); applySim(); };
   simButtons();
   $('#updBtn').onclick = async () => {
-    if (!upd.sha) return;
-    if (!ON_PROJECTOR) {
-      store.set('installed', upd.sha);
-      onUpdating('download');
-      setTimeout(() => onUpdating('install'), 2200); setTimeout(() => onUpdating('restart'), 3400); setTimeout(() => location.reload(), 4300);
-      return;
-    }
     const b = $('#updBtn');
-    b.disabled = true; b.textContent = 'Updating…';   // the app downloads the new web files from GitHub; every page reloads
-    try {
-      const r = await fetch('/api/update', { method: 'POST' });
-      if (!r.ok) throw new Error('update failed');
-      store.set('installed', upd.sha);
-      setTimeout(() => location.reload(), 600);
-    } catch (e) { b.disabled = false; b.textContent = 'Update failed · try again'; }
+    b.disabled = true; b.textContent = 'Updating…';
+    if (!(await startUpdate())) { b.disabled = false; b.textContent = 'Update failed · try again'; }
   };
   window.addEventListener('online', checkNet);
   window.addEventListener('offline', checkNet);
+}
+
+// the update itself: from the control page's button or the remote's Update page. -> true when it's on its way
+async function startUpdate() {
+  if (!upd.sha) return false;
+  if (!ON_PROJECTOR) {   // the prototype: pretend
+    store.set('installed', upd.sha);
+    onUpdating('download');
+    setTimeout(() => onUpdating('install'), 2200); setTimeout(() => onUpdating('restart'), 3400); setTimeout(() => location.reload(), 4300);
+    return true;
+  }
+  try {   // the app downloads the new web files from GitHub; every page reloads
+    const r = await fetch('/api/update', { method: 'POST' });
+    if (!r.ok) throw new Error('update failed');
+    store.set('installed', upd.sha);
+    setTimeout(() => location.reload(), 600);
+    return true;
+  } catch (e) { return false; }
 }
 
 /* ---------- city search (Open-Meteo geocoding, free, no key) ---------- */
@@ -1563,6 +1612,10 @@ function selfTest() {
   ok(Math.abs(back[0] - 123) < 1e-6 && Math.abs(back[1] - 77) < 1e-6, 'reverse warp round-trips');
   ok(validQuad(quad) && !validQuad([[0, 0], [100, 0], [100, 100], [0, 100]]) && !validQuad([[0, 0], [0, 0], [0, 9], [9, 9]]), 'folded or collapsed warps are refused');
   ok(inQuad(quad, [400, 300]) && !inQuad(quad, [20, 20]), 'inside-the-picture test');
+  ok(normRot(190) === -170 && normRot(-180) === 180 && snapRot(88) === 90 && snapRot(80) === 80, 'rotation wraps and settles on right angles');
+  { const b0 = { x: 100, y: 100, w: 200, h: 100 }, t = { x: 100, y: 100, w: 300, h: 100 }, r = Math.PI / 2, a = turnPt(b0, r, [100, 150]);
+    keepAnchor(t, b0, 'e', r); const a2 = turnPt(t, r, [t.x, t.y + 50]);
+    ok(Math.abs(a[0] - a2[0]) < 1e-6 && Math.abs(a[1] - a2[1]) < 1e-6, 'resizing a rotated widget keeps the opposite side in place'); }
   if (bgTypes.window) {
     const keep = L, ids = w => ambienceFor(w).map(x => x.id).join();
     L = { windowOn: true, sections: [{ bg: 'window', bgOpts: { scene: 'sea' } }] };
@@ -1592,7 +1645,7 @@ function onUpdating(st) {
  *          detail, say: [voice line ids], key, until: ms, at: ms (when it last became new) }.
  * urgent interrupts, heads pops once per key, ambient rotates, base = a never-blank default (Now & Next, All clear, the date…). */
 const feed = new Map();
-let slept = [], spot = null, debriefing = false;
+let slept = [], spot = null, debriefing = false, focusOn = false;
 function card(c) {
   const old = feed.get(c.id), key = c.key == null ? c.title + '|' + c.detail : c.key;
   const n = Object.assign({ tier: 'ambient', source: 'time', kind: 'text', icon: '', title: '', detail: '' }, c, { key, at: old && old.key === key ? old.at : Date.now() });
@@ -1865,6 +1918,18 @@ window.BearWall = {
   // cards for the Dynamic widgets (see the cards section)
   card, uncard, cards: cardsNow, isMainDynamic, get spot() { return spot; },
   get simulating() { return !!DEV.simulate; },
+  // the remote (WallActivity, outside Light mode): left/right/up/down/ok/back -> the Main Dynamic's pages (pages.js)
+  remote(key, repeat) {
+    if (window.BearWallPages && BearWallPages.key(key, !!repeat)) return;
+    if (key === 'ok' && !repeat) debrief('button');
+  },
+  mainDynamic: () => (L.widgets.find(w => w.type === 'dynamic' && isMainDynamic(w.id)) || {}).id || null,
+  get update() { return upd; }, checkUpdate: () => checkUpdate(), startUpdate: () => startUpdate(),
+  focus(on, keepId) {   // the Timer: every other widget fades away while it's set and running
+    focusOn = !!on; stage.classList.toggle('bw-focus', focusOn);
+    wallEl.querySelectorAll('.widget.bw-keep').forEach(e => e.classList.remove('bw-keep'));
+    if (on && keepId) { const el = wallEl.querySelector(`.widget[data-wid="${keepId}"]`); if (el) el.classList.add('bw-keep'); }
+  },
   // Draw mode (draw.js): the section under the pointer, its drawing layer, save + redraw
   drawHost: {
     get layout() { return L; }, get inside() { return inside; },
