@@ -240,7 +240,7 @@ const playThere = (id, variant) => ON ? api('POST', '/api/sound/play', { id, var
 const getP = p => p.split('.').reduce((o, k) => o[k], S);
 const setP = (p, v) => { const ks = p.split('.'), last = ks.pop(); ks.reduce((o, k) => o[k], S)[last] = v; };
 const range = (k, label) => `<div class="lbl"><span>${label}</span><span data-v="${k}"></span></div><input type="range" min="0" max="13" step="1" data-k="${k}" aria-label="${label}">`;
-let card = null, busy = false;
+let card = null;
 function buildCard() {
   card = $('#soundCard');
   if (!card || WALL) { card = null; return; }
@@ -259,10 +259,7 @@ function buildCard() {
     <input class="field" id="sndKey" type="password" autocomplete="off" spellcheck="false" placeholder="API key, stays on the projector">
     <div class="actions"><button class="btn" id="sndKeySave">Save key</button><button class="btn quiet" id="sndCredBtn">Credits</button></div>
     <div class="note" id="sndCredits"></div>
-    <div class="lbl"><span>Sound board</span></div>
-    <div class="sub">▶ plays a candidate on the projector. Pick the winner. G1-G3 are ElevenLabs takes: generating one uses credits.</div>
-    <div class="note" id="sndMsg"></div>
-    <div id="sndBoard"></div>`;
+`;
   card.addEventListener('input', e => {
     const k = e.target.dataset.k;
     if (!k) return;
@@ -270,17 +267,10 @@ function buildCard() {
     if (k === 'master') muted = false;
     applyLevels(); renderValues(); saveLater(300);
   });
-  card.addEventListener('change', e => {
-    if (e.target.dataset.pick == null) return;
-    S.pick[e.target.dataset.pick] = e.target.value; saveLater(0);
-  });
   card.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.test) { const id = reg()[TEST[b.dataset.test]] ? TEST[b.dataset.test] : Object.keys(reg()).find(i => reg()[i].type === b.dataset.test); if (id) playThere(id); }
-    else if (b.dataset.play) playThere(b.dataset.id, b.dataset.play);
-    else if (b.dataset.gen) generate(b.dataset.id, b.dataset.gen);
-    else if (b.dataset.del) { if (b.dataset.sure) api('DELETE', '/api/sound/file/' + b.dataset.del).then(loadFiles); else { b.dataset.sure = '1'; b.textContent = 'sure?'; } }
     else if (b.id === 'sndKeySave') saveKey();
     else if (b.id === 'sndCredBtn') credits();
   });
@@ -297,20 +287,6 @@ function renderCard() {
   renderValues();
   $('#sndKeyState').textContent = !ON ? 'projector only' : hasKey ? 'Key saved' : 'No key';
   card.querySelectorAll('#sndKey, #sndKeySave, #sndCredBtn').forEach(x => { x.disabled = !ON; });
-  const r = reg(), ids = Object.keys(r);
-  $('#sndBoard').innerHTML = !ids.length ? '<div class="note">No sounds yet</div>' : TYPES.map(([t, name]) => {
-    const mine = ids.filter(id => r[id].type === t);
-    return !mine.length ? '' : `<div class="lbl"><span>${name}</span></div>` + mine.map(id => {
-      const e = r[id], pick = S.pick[id] || 'a';
-      const chip = (v, label, extra) => `<span class="sbc"><button data-id="${id}" data-play="${v}" title="Play ${esc(label)}">▶ ${v.toUpperCase()}</button>`
-        + `<input type="radio" name="pick-${id}" value="${v}" data-pick="${id}" aria-label="Pick ${v.toUpperCase()}"${pick === v ? ' checked' : ''}>${extra || ''}</span>`;
-      const synth = Object.keys(e.variants || {}).map(v => chip(v, e.variants[v].name || v));
-      const takes = !e.eleven ? [] : ['g1', 'g2', 'g3'].map(g => files.has(`${id}.${g}.mp3`)
-        ? chip(g, 'ElevenLabs take', `<button class="sbx" data-del="${id}.${g}.mp3" title="Delete this take">✕</button>`)
-        : `<span class="sbc"><button data-id="${id}" data-gen="${g}" ${!ON || !hasKey || busy ? 'disabled' : ''} title="Generate with ElevenLabs (uses credits)">+ ${g.toUpperCase()}</button></span>`);
-      return `<div class="sbrow"><div class="sbname">${esc(e.label || id)}</div><div class="sbchips">${synth.concat(takes).join('')}</div></div>`;
-    }).join('');
-  }).join('');
 }
 function saveKey() {
   const i = $('#sndKey'), key = i.value.trim();
@@ -324,16 +300,6 @@ function credits() {
     $('#sndCredits').textContent = j.error ? 'Credits: ' + j.error
       : `${j.left.toLocaleString()} credits left of ${j.limit.toLocaleString()}` + (j.resets ? ` · resets ${new Date(j.resets * 1000).toLocaleDateString([], { day: 'numeric', month: 'short' })}` : '');
   });
-}
-function generate(id, take) {
-  const e = reg()[id];
-  if (busy || !e || !e.eleven) return;
-  busy = true; renderCard();
-  $('#sndMsg').textContent = `Generating ${e.label || id} ${take.toUpperCase()}… (up to a minute)`;
-  api('POST', '/api/sound/generate', { id, take, prompt: e.eleven.prompt, seconds: e.eleven.seconds, loop: !!e.eleven.loop }).then(j => {
-    $('#sndMsg').textContent = j.ok ? `Saved ${e.label || id} ${take.toUpperCase()}. Press ▶ to hear it.` : 'Generate failed: ' + (j.error || 'unknown');
-  }).catch(() => { $('#sndMsg').textContent = 'Generate failed: no answer from the projector'; })
-    .then(() => { busy = false; return loadFiles(); }).then(credits);
 }
 
 /* ---------- start ---------- */

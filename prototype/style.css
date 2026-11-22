@@ -302,14 +302,3 @@ input.hue { accent-color: #fff; background: linear-gradient(90deg, red, #ff0, li
 .svol .svn { font-size: 26px; font-weight: 800; }
 .svol .svbar { flex: 1 0 100%; height: 8px; margin-top: 10px; border-radius: 99px; background: #ffffff1f; overflow: hidden; }
 .svol .svbar i { display: block; height: 100%; background: #bff4ff; transform-origin: left; transition: transform .2s; }
-
-/* control page: the Sound card's sound board */
-.sbrow { padding: 8px 0; border-bottom: 1px solid #ffffff12; }
-.sbname { font-weight: 800; font-size: 13px; margin-bottom: 6px; }
-.sbchips { display: flex; flex-wrap: wrap; gap: 6px; }
-.sbc { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 99px; background: #ffffff10; padding: 2px 6px 2px 2px; }
-.sbc button { border: 0; background: none; color: var(--text); font-weight: 800; font-size: 12px; padding: 5px 7px; border-radius: 99px; cursor: pointer; }
-.sbc button:hover:not(:disabled) { background: #ffffff1c; }
-.sbc button:disabled { opacity: .35; cursor: default; }
-.sbc input[type=radio] { accent-color: var(--c); margin: 0 2px; cursor: pointer; }
-.sbc .sbx { color: var(--dim); padding: 5px; }
