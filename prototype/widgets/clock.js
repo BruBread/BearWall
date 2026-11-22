@@ -226,7 +226,12 @@ BearWall.register({
       const [hm, ap = ''] = U.fmtTime(now, opts.h24).split(' '), [hh, mm] = hm.split(':');
       if (style === 'flip') flip(el, hh.padStart(2, ' ') + mm + pad(s), opts.seconds, ctx.motion);
       else {
-        if (style === 'digital') U.setRing(el.querySelector('.ring'), (m + s / 60) / 60 * 100);
+        if (style === 'digital') {
+          // whole minutes only: a per-second value kept the 1.3 s dashoffset transition running forever (~62 layouts/s
+          // on the projector). Now it eases once a minute. The thickness is in the key so a Look change still redraws.
+          const ring = el.querySelector('.ring'), rk = m + getComputedStyle(ring).getPropertyValue('--thick');
+          if (ring._k !== rk) { ring._k = rk; U.setRing(ring, m / 60 * 100); }
+        }
         else {
           const rot = (sel, deg) => { el.querySelector(sel).style.transform = `rotate(${deg}deg)`; };
           rot('.hr', (h % 12 + m / 60) * 30); rot('.mn', (m + s / 60) * 6);

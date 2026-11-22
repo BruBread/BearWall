@@ -175,6 +175,7 @@ function hudEl() {
 }
 function renderHud() {
   if (!hud || !state) return;
+  if (mode) BearWall.hud(hud);   // section 1
   const l = state.light, i = sceneOf(state);
   hud.querySelector('.ldot').style.background = swatch(l);
   hud.querySelector('.lname').textContent = !state.bulb.setup ? 'No bulb set up' : !l.on ? 'Off' : i >= 0 ? state.settings.scenes[i].name : l.mode === 'white' ? 'White' : 'Colour';
@@ -183,7 +184,9 @@ function renderHud() {
   hud.querySelector('small').textContent = l.mode === 'colour' ? '◀ ▶ scene · VOL brightness · ▲ ▼ colour · OK on/off' : '◀ ▶ scene · VOL brightness · ▲ ▼ warmth · OK on/off';
 }
 function lightMode(on) {
+  if (!!on !== mode) BearWall.sound(on ? 'light-on' : 'light-off');   // the app re-sends "on" with each press to restart its timer
   mode = !!on;
+  if (mode) BearWall.hud(hudEl());
   hudEl().classList.toggle('on', mode);
   if (mode) refresh();
   renderHud();
@@ -196,13 +199,15 @@ function lightKey(k) {
     const cur = sceneOf(state);
     scene = ((cur >= 0 ? cur : scene < 0 ? (k === 'right' ? -1 : 0) : scene) + (k === 'right' ? 1 : -1) + n) % n;
     Object.assign(state.light, state.settings.scenes[scene].light);
+    BearWall.sound('light-scene', { pitch: scene % 8 });
     render();
     send('scene', { i: scene });
-  } else if (k === 'volup' || k === 'voldown') send('light', { on: true, bright: clamp(l.bright + (k === 'volup' ? 100 : -100), 10, 1000) });
+  } else if (k === 'volup' || k === 'voldown') { BearWall.sound('light-tick'); send('light', { on: true, bright: clamp(l.bright + (k === 'volup' ? 100 : -100), 10, 1000) }); }
   else if (k === 'up' || k === 'down') {
     const d = k === 'up' ? 1 : -1;   // up = warmer white / hue forward
+    BearWall.sound('light-tick');
     send('light', l.mode === 'colour' ? { on: true, h: (l.h + 20 * d + 360) % 360 } : { on: true, temp: clamp(l.temp - 100 * d, 0, 1000) });
-  } else if (k === 'ok') send('light', { on: !l.on });
+  } else if (k === 'ok') { BearWall.sound(l.on ? 'light-off' : 'light-on'); send('light', { on: !l.on }); }
 }
 
 function render() { renderPage(); renderHud(); }

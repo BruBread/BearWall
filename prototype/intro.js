@@ -43,6 +43,7 @@
   let cur = null;   // whichever run the helpers below record into (the intro or the update screen)
 
   const later = (ms, fn) => cur.timers.push(setTimeout(fn, ms));
+  const snd = id => window.BearWallSound && BearWallSound.play(id);   // sound.js (Phase 2)
   const anim = (el, frames, opts) => { const a = el.animate(frames, opts); cur.anims.push(a); return a; };
   function div(parent, cls, css) {
     const d = document.createElement('div');
@@ -108,7 +109,7 @@
     const name = (sec.dataset.label || '').split(' · ')[0].toUpperCase();
     if (name && w > 90 && h > 40) {
       const tag = div(o, 'bw-tag', { left: b + 6 + 'px' }), full = name + ' · ONLINE';
-      for (let k = 1; k <= full.length; k++) later(t.lock * .7 + k * 22, () => { tag.textContent = full.slice(0, k); });
+      for (let k = 1; k <= full.length; k++) later(t.lock * .7 + k * 22, () => { tag.textContent = full.slice(0, k); if (k % 3 === 1) snd('intro-tick'); });
     }
   }
 
@@ -159,6 +160,7 @@
     const sections = [...stage.querySelectorAll('.section:not(.win-off)')];
     if (t.fade) {   // calm: a gentle fade, nothing else
       const widgets = order([...stage.querySelectorAll('.widget')], stage.clientHeight), gap = Math.min(t.wid, 900 / Math.max(1, widgets.length));
+      snd('intro-hum'); later(Math.max(0, widgets.length - 1) * gap + t.fade * .6, () => snd('intro-chord'));
       widgets.forEach((el, i) => anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: t.fade, delay: i * gap, fill: 'backwards' }));
       stage.removeAttribute('data-bw-intro');
       later((widgets.length - 1) * gap + t.fade + 20, cleanup);
@@ -173,13 +175,15 @@
 
     // phase 1: centre pulse and power traces (one stage-wide overlay of plain lines)
     const wall = overlay(stage);
+    snd('intro-hum');
     pulse(wall, C, [{ transform: 'scale(.2)', opacity: 1 }, { transform: 'scale(2.4)', opacity: 0 }], { duration: 520, easing: 'ease-out', fill: 'forwards' });
     plan.forEach((p, i) => {
       p.at = i * gap + t.trace;   // when the trace reaches the section
       const [a, b, la, lb] = trace(wall, C, p.near), split = la + lb ? la / (la + lb) : .5;
       grow(a, t.trace * split, i * gap, t.steps || 'ease-in');
       grow(b, t.trace * (1 - split), i * gap + t.trace * split, t.steps || 'ease-out');
-      later(p.at, () => lockOn(p.sec, t));
+      later(i * gap, () => snd('intro-zip'));
+      later(p.at, () => { snd('intro-clunk'); lockOn(p.sec, t); });
     });
 
     // phase 3: each section's widgets print once it has locked on
@@ -191,11 +195,12 @@
       [...stage.querySelectorAll('.section')].forEach(sec => {
         const ws = order([...sec.querySelectorAll('.widget')], sec.offsetHeight), s0 = begin[sec.dataset.sid] || 0;
         const wg = Math.min(t.wid, 600 / Math.max(1, ws.length));
-        ws.forEach((el, k) => { print(el, t, s0 + k * wg); end = Math.max(end, s0 + k * wg + t.print); });
+        ws.forEach((el, k) => { print(el, t, s0 + k * wg); later(s0 + k * wg, () => snd('intro-tick')); end = Math.max(end, s0 + k * wg + t.print); });
       });
       stage.removeAttribute('data-bw-intro');   // each widget's cover now hides it until its turn
       end = Math.max(end, plan[plan.length - 1].at + t.lock + t.border - firstPrint);
       // fade the light work out, then leave the DOM exactly as it was
+      later(end - 200, () => snd('intro-chord'));
       later(end, () => run && run.nodes.filter(n => n.className === 'bw-o').forEach(n => anim(n, [{ opacity: 1 }, { opacity: 0 }], { duration: 320, fill: 'forwards' })));
       later(end + 340, cleanup);
     });
@@ -232,12 +237,12 @@
           closing ? [{ transform: 'scaleY(.04)', opacity: 0 }, { transform: 'scaleY(1)', opacity: 1 }] : [{ transform: 'scaleY(1)', opacity: 1 }, { transform: 'scaleY(.04)', opacity: 0 }],
           { duration: closing ? t.close : t.open, delay: k * t.gap, easing: t.steps || 'cubic-bezier(.5, 0, .3, 1)', fill: 'both' })));
       });
-      put(true);
+      put(true); snd('blinds-close');
       b.timers.push(setTimeout(() => {
         b.anims.forEach(a => a.cancel()); b.anims = [];
         b.nodes.forEach(n => n.remove()); b.nodes = [];
         b.flipped = true; flip();
-        put(false);
+        put(false); snd('blinds-open');
         b.timers.push(setTimeout(endBlinds, t.open + (t.n - 1) * t.gap + 30));
       }, t.close + (t.n - 1) * t.gap + 80));
     });
@@ -271,6 +276,7 @@
     if (!stage) return;
     css();
     const u = cur = up = { stage, timers: [], anims: [], nodes: [], text, screen: null };
+    snd('power-down');
     const sections = [...stage.querySelectorAll('.section')], first = sections[0];
     const t = T[motion] && !T[motion].fade ? T[motion] : null;
     if (!t) {   // calm / off: no show, just the screen

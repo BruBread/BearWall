@@ -88,6 +88,7 @@ const copy = o => JSON.parse(JSON.stringify(o));
 const uid = () => Math.random().toString(36).slice(2, 8);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pad = n => String(n).padStart(2, '0');
+const snd = (id, o) => window.BearWallSound && BearWallSound.play(id, o);   // sound.js; silent on the control page
 
 // On the projector the page comes from the BearWall app: /wall is what the projector shows, /control is your laptop.
 // There the layout, settings and device switches live in the app (shared by both, live), not in this browser.
@@ -1259,13 +1260,45 @@ function simSystem(now) {
   };
 }
 
+// a sound when an alert appears or changes level (not when only its text ticks over, like "Offline 3 min")
+const ALERT_SOUND = { info: 'alert-info', warning: 'alert-warn', critical: 'alert-critical' };
 function setAlert(id, a) {
   const old = alerts.find(x => x.id === id);
   if (old && old.level === a.level && old.title === a.title && old.detail === a.detail) return;
+  if (!old || old.level !== a.level) snd(id === 'net' && a.level === 'critical' ? 'net-down' : a.kind === 'update' ? 'update' : ALERT_SOUND[a.level]);
   alerts = alerts.filter(x => x.id !== id).concat(Object.assign({ id, since: old ? old.since : new Date() }, a));
   render();
 }
-function clearAlert(id) { if (alerts.some(x => x.id === id)) { alerts = alerts.filter(x => x.id !== id); render(); } }
+function clearAlert(id) {
+  const old = alerts.find(x => x.id === id);
+  if (!old) return;
+  if (id === 'net' && old.level === 'critical') snd('net-up');
+  alerts = alerts.filter(x => x.id !== id); render();
+}
+
+/* ---------- sound: window ambience and the hourly bell ---------- */
+let ambKey = '', bellHour = new Date().getHours(), sleeping = false;
+// what you'd hear through the window: the weather, then the time of day, then the view outside
+function ambienceFor(w) {
+  const win = L.windowOn && L.sections.find(windowed);
+  if (!win) return [];
+  const view = (win.bgOpts && win.bgOpts.scene) || 'city', wet = w.cond === 'rain' || w.cond === 'thunder', out = [];
+  if (wet) out.push({ id: 'amb-rain', gain: 1 });
+  if (w.cond === 'thunder') out.push({ id: 'amb-thunder', gain: .8 });
+  if (w.night) out.push({ id: 'amb-crickets', gain: wet ? .3 : .7 });
+  else if (!wet) out.push({ id: 'amb-birds', gain: view === 'city' ? .35 : .6 });
+  if (view === 'city') out.push({ id: 'amb-city', gain: .5 });
+  if (view === 'sea') out.push({ id: 'amb-waves', gain: .8 });
+  return out;
+}
+function soundTick() {
+  const S2 = window.BearWallSound;
+  if (!S2 || sleeping) return;
+  const h = new Date().getHours();
+  if (h !== bellHour) { bellHour = h; if (S2.settings.bell) S2.play('hour-bell', { hour: h }); }
+  const layers = ambienceFor(weatherNow(timeNow())), k = JSON.stringify(layers);
+  if (k !== ambKey) { ambKey = k; S2.ambience(layers); }
+}
 
 // Real internet check. A failed request only counts as "offline" once a request has worked here before, or when the
 // browser itself says it's offline, so a sandbox that blocks requests (like the artifact viewer) doesn't cry wolf.
@@ -1445,6 +1478,14 @@ function selfTest() {
   ok(Math.abs(back[0] - 123) < 1e-6 && Math.abs(back[1] - 77) < 1e-6, 'reverse warp round-trips');
   ok(validQuad(quad) && !validQuad([[0, 0], [100, 0], [100, 100], [0, 100]]) && !validQuad([[0, 0], [0, 0], [0, 9], [9, 9]]), 'folded or collapsed warps are refused');
   ok(inQuad(quad, [400, 300]) && !inQuad(quad, [20, 20]), 'inside-the-picture test');
+  if (bgTypes.window) {
+    const keep = L, ids = w => ambienceFor(w).map(x => x.id).join();
+    L = { windowOn: true, sections: [{ bg: 'window', bgOpts: { scene: 'sea' } }] };
+    ok(ids({ cond: 'thunder', night: true }) === 'amb-rain,amb-thunder,amb-crickets,amb-waves' && ids({ cond: 'clear', night: false }) === 'amb-birds,amb-waves', 'window ambience follows weather, time and view');
+    L = { windowOn: false, sections: L.sections };
+    ok(ids({ cond: 'rain' }) === '', 'no ambience without Window mode');
+    L = keep;
+  }
   const m = migrate({ screens: [{ x: 100, y: 50, widgets: [{ id: 'a', x: 8, y: 16 }] }] });
   ok(!m.warp && m.widgets[0].x === 108 && m.widgets[0].y === 66, 'old screen layouts fold onto one wall', m);
 }
@@ -1466,6 +1507,7 @@ function listen() {
     if (e.data === 'reload') return updatingNow ? setTimeout(() => location.reload(), 900) : location.reload();   // let "Restarting" show
     if (e.data.startsWith('updating:')) return WALL_ONLY && onUpdating(e.data.slice(9));
     if (e.data === 'lights') return window.BearWallLights && BearWallLights.refresh();   // the bulb changed (Lights.java)
+    if (e.data.startsWith('sound:') || e.data.startsWith('kv:sound:')) return window.BearWallSound && BearWallSound.event(e.data);
     if (e.data.startsWith('live:')) {   // live:<client>:<json>
       const rest = e.data.slice(5), json = rest.slice(rest.indexOf(':') + 1);
       try { remote = JSON.parse(json) || {}; } catch (err) { remote = {}; }
@@ -1516,6 +1558,15 @@ window.BearWall = {
   // the remote's Light mode (the app calls these; lights.js does the work)
   lightMode: on => window.BearWallLights && BearWallLights.mode(on),
   lightKey: k => window.BearWallLights && BearWallLights.key(k),   // the remote's MENU button (the app calls this)
+  // on-wall overlays (Light mode, volume bar) live in section 1, the main screen, so they warp with it.
+  // Window mode switches section 1 off when it isn't a window, so then the first section still showing hosts them.
+  // Call it each time an overlay shows: rebuilding the stage makes new section elements.
+  hud(el) {
+    const s = L && (L.sections.find(x => !winOff(x)) || L.sections[0]), host = (s && wallEl && secEl(s)) || document.body;
+    if (el.parentNode !== host) host.appendChild(el);
+    el.classList.toggle('in-sec', host !== document.body);
+    return el;
+  },
   // feeds a page can't fetch itself (news for Walang Pasok); only the projector app can do this
   proxy: ON_PROJECTOR ? url => fetch('/api/proxy?url=' + encodeURIComponent(url)).then(r => { if (!r.ok) throw new Error('proxy ' + r.status); return r.text(); }) : undefined,
   register(m) {
@@ -1546,6 +1597,7 @@ window.BearWall = {
     checkNet(); setInterval(checkNet, 30 * 1000);
     checkUpdate(); setInterval(checkUpdate, 30 * 60 * 1000);
     setInterval(() => {   // widgets with `every` refresh on their own clock
+      soundTick();
       const t = Date.now(), due = inst.filter(i => i.m.every && t - i.last >= i.m.every - 100);
       const bgDue = bgInst.filter(i => i.type && bgTypes[i.type].every && t - i.last >= bgTypes[i.type].every - 100);
       if (!due.length && !bgDue.length) return;
@@ -1555,8 +1607,18 @@ window.BearWall = {
     }, 1000);
   },
   // the projector app calls these when the remote's POWER button sleeps / wakes the projector
-  sleep() { if (!stage) return; window.BearWallIntro && BearWallIntro.cancel(); stage.style.visibility = 'hidden'; },
-  wake() { if (!stage) return; stage.style.visibility = ''; buildStage(); playIntro(); fetchWeather(); },
+  // asleep = silent: the sleep sound plays, then sound.js stops the ambience; waking brings it back
+  sleep() {
+    if (!stage) return;
+    snd('sleep'); sleeping = true; window.BearWallSound && BearWallSound.sleep();
+    window.BearWallIntro && BearWallIntro.cancel(); stage.style.visibility = 'hidden';
+  },
+  wake() {
+    if (!stage) return;
+    sleeping = false; ambKey = ''; window.BearWallSound && BearWallSound.wake(); snd('wake');
+    stage.style.visibility = ''; buildStage(); playIntro(); fetchWeather();
+  },
+  sound: snd,   // BearWall.sound(id, opts) for widgets and lights.js
   _test: { homography, applyH, validQuad, inQuad, localToPanel, panelToLocal, get inside() { return inside; }, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };
 })();

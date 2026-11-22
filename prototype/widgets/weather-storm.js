@@ -44,7 +44,7 @@ SAMPLE.cone = cone(SAMPLE.future[0]);
 
 const boxes = new Set();
 const redraw = () => boxes.forEach(el => el.isConnected ? draw(el, el._ctx) : boxes.delete(el));
-let storm = null, listAt = 0, okAt = 0;
+let storm = null, listAt = 0, okAt = 0, heard = null;   // heard: the storm we already sounded for
 const geoCache = {};
 async function load() {
   if (Date.now() - listAt < 30 * 60e3) return;
@@ -59,6 +59,7 @@ async function load() {
       || (f.bbox && f.bbox[2] >= 115 && f.bbox[0] <= 135 && f.bbox[3] >= 5 && f.bbox[1] <= 25)));
     if (!f) { storm = null; return redraw(); }
     const p = f.properties, gk = p.eventid + '-' + p.episodeid;
+    if (heard !== p.eventid) { heard = p.eventid; BearWall.sound('storm'); }   // a storm newly inside PAR
     if (!geoCache[gk]) {
       const g = await (await fetch(p.url.geometry)).json();
       const feats = g.features || [];

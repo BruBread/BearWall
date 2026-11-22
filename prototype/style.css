@@ -283,6 +283,7 @@ input.hue { accent-color: #fff; background: linear-gradient(90deg, red, #ff0, li
 .lhud { position: fixed; left: 50%; bottom: 7vh; z-index: 50; width: min(380px, 80vw); padding: 14px 18px; border-radius: 18px; background: #000d; border: 1px solid #ffffff2a;
   color: #f4f7ff; font-family: var(--mono); pointer-events: none; opacity: 0; transform: translate(-50%, 16px); transition: opacity .25s, transform .25s; }
 .lhud.on { opacity: 1; transform: translate(-50%, 0); }
+.lhud.in-sec { position: absolute; bottom: 7%; width: min(380px, 80%); }   /* inside section 1, warped with it */
 .lhud b { font-size: 12px; letter-spacing: .2em; color: #bff4ff; }
 .lhud .lrow { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 18px; font-weight: 700; font-family: var(--ui); }
 .lhud .ldot { width: 18px; height: 18px; border-radius: 50%; flex: none; }
@@ -290,3 +291,25 @@ input.hue { accent-color: #fff; background: linear-gradient(90deg, red, #ff0, li
 .lhud .lbar { height: 6px; border-radius: 99px; background: #ffffff1f; overflow: hidden; }
 .lhud .lbar i { display: block; height: 100%; background: #bff4ff; transform-origin: left; transition: transform .2s; }
 .lhud small { display: block; margin-top: 8px; font-size: 11px; opacity: .6; }
+
+/* the volume bar on the wall (section 1, top): transform/opacity only */
+.svol { position: fixed; left: 50%; top: 7vh; z-index: 50; width: min(320px, 70vw); padding: 12px 18px 16px; border-radius: 18px; background: #000d; border: 2px solid #ffffff2a;
+  color: #f4f7ff; font-family: var(--mono); pointer-events: none; opacity: 0; transform: translate(-50%, -16px); transition: opacity .25s, transform .25s;
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; }
+.svol.on { opacity: 1; transform: translate(-50%, 0); }
+.svol.in-sec { position: absolute; top: 7%; width: min(320px, 70%); }
+.svol b { font-size: 18px; letter-spacing: .2em; color: #bff4ff; }
+.svol .svn { font-size: 26px; font-weight: 800; }
+.svol .svbar { flex: 1 0 100%; height: 8px; margin-top: 10px; border-radius: 99px; background: #ffffff1f; overflow: hidden; }
+.svol .svbar i { display: block; height: 100%; background: #bff4ff; transform-origin: left; transition: transform .2s; }
+
+/* control page: the Sound card's sound board */
+.sbrow { padding: 8px 0; border-bottom: 1px solid #ffffff12; }
+.sbname { font-weight: 800; font-size: 13px; margin-bottom: 6px; }
+.sbchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sbc { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 99px; background: #ffffff10; padding: 2px 6px 2px 2px; }
+.sbc button { border: 0; background: none; color: var(--text); font-weight: 800; font-size: 12px; padding: 5px 7px; border-radius: 99px; cursor: pointer; }
+.sbc button:hover:not(:disabled) { background: #ffffff1c; }
+.sbc button:disabled { opacity: .35; cursor: default; }
+.sbc input[type=radio] { accent-color: var(--c); margin: 0 2px; cursor: pointer; }
+.sbc .sbx { color: var(--dim); padding: 5px; }

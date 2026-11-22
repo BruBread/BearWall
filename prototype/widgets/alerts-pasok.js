@@ -25,6 +25,7 @@ console.assert(
 
 // headlines from the news, once the projector server can fetch feeds for us (BearWall.proxy, Phase 1)
 let headlines = [];
+const heard = new Set();   // headlines already sounded, however many widgets show them
 async function poll() {
   if (!BearWall.proxy) return;
   const all = [];
@@ -59,6 +60,7 @@ BearWall.register(Object.assign({}, base, {
     let keywords = keywordsOf(ctx.opts.keywords);
     if (ctx.opts.sample && !keywords.length) keywords = ['your school'];
     const m = match(ctx.opts.sample ? [`Classes suspended in ${keywords[0]} due to heavy rain`] : headlines, keywords);
+    if (m && !heard.has(m.headline)) { heard.add(m.headline); BearWall.sound('pasok'); }
     const alerts = m ? [{ id: 'pasok', kind: 'pasok', level: 'critical', title: `Walang pasok · ${m.keyword}`, detail: m.headline, since: new Date() }] : [];
     base.update(el, Object.assign({}, ctx, { alerts }));
   }

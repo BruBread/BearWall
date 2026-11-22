@@ -3,8 +3,11 @@ package com.bearwall;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -24,7 +27,8 @@ import java.io.File;
 
 /**
  * The projector's home screen: the wall, fullscreen, from the app's own server.
- * Remote: MENU toggles Window mode, SETTINGS opens a small app menu, F9 (the light button) toggles Light mode. Back never leaves the wall, and the POWER key
+ * Remote: MENU toggles Window mode, SETTINGS opens a small app menu, F9 (the light button) toggles Light mode, volume/mute set
+ * BearWall's own volume (bulb brightness in Light mode). Back never leaves the wall, and the POWER key
  * is left alone (a root daemon on the projector handles it). In sleep mode (Lcd_en = 0) the wall hides and pauses; waking replays the intro.
  */
 public class WallActivity extends Activity {
@@ -62,7 +66,17 @@ public class WallActivity extends Activity {
         hideBars();
         wv.loadUrl(URL);
         ui.postDelayed(lightCheck, 500);
+        // only holders of DUMP (the adb shell, root scripts like the power daemon) can ask for a sound
+        registerReceiver(soundRx, new IntentFilter("com.bearwall.SOUND"), "android.permission.DUMP", null);
     }
+
+    @Override protected void onDestroy() { unregisterReceiver(soundRx); super.onDestroy(); }
+
+    // am broadcast -a com.bearwall.SOUND --es id flip   (the power daemon, when the picture turns 180)
+    final BroadcastReceiver soundRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
+        String id = i.getStringExtra("id");
+        if (id != null && id.matches("[a-z0-9-]{1,40}")) wv.evaluateJavascript("window.BearWallSound && BearWallSound.play('" + id + "')", null);
+    }};
 
     final Runnable reload = new Runnable() { public void run() { wv.loadUrl(URL); } };
 
@@ -144,6 +158,13 @@ public class WallActivity extends Activity {
                 }
                 return true;
             }
+        }
+        // outside Light mode the volume keys drive BearWall's own volume (the system volume stays at 13, the ceiling)
+        String vol = k == KeyEvent.KEYCODE_VOLUME_UP ? "up" : k == KeyEvent.KEYCODE_VOLUME_DOWN ? "down" : k == KeyEvent.KEYCODE_VOLUME_MUTE ? "mute" : null;
+        if (vol != null) {
+            if (down && (e.getRepeatCount() == 0 || !vol.equals("mute")))
+                wv.evaluateJavascript("window.BearWallSound && BearWallSound.volKey('" + vol + "')", null);
+            return true;
         }
         if (k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_SETTINGS) {
             if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {

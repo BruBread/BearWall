@@ -35,6 +35,8 @@ import java.util.zip.ZipInputStream;
  *   GET/PUT /api/kv/{key}      saved state: layout, settings, devices, installed (JSON files)
  *   GET  /api/events           Server-Sent Events: "kv:{key}:{client}" after a save, "updating:{stage}" during an update, "reload" after it
  *   GET  /api/lights           the bulb: light, scenes, schedules, status (POST .../light, scene, scene/save, settings, setup, laptop)
+ *   GET  /api/sound            ElevenLabs: {hasKey, files} (PUT .../key, GET .../credits, POST .../generate, DELETE .../file/{name},
+ *                              POST .../play = "sound:play:{id}:{variant}" to the wall); GET /api/sounds/{name} serves a saved take
  *   GET  /api/system           the projector's stats (Health.java)
  *   GET  /api/proxy?url=       fetches news / storm feeds and the GitHub commit feed for the page (only the hosts listed in PROXY_HOSTS)
  *   PUT/GET/DELETE /api/photos/{id}   uploaded photos
@@ -61,6 +63,7 @@ class Server {
     volatile long okUntil = 0;
     final ExecutorService pool = Executors.newCachedThreadPool();
     final Lights lights;
+    final Sound sound;
 
     Server(Context c) {
         this.c = c;
@@ -70,6 +73,7 @@ class Server {
         kv.mkdirs();
         photos.mkdirs();
         lights = new Lights(c.getFilesDir(), this);
+        sound = new Sound(c.getFilesDir());
     }
 
     void start() {
@@ -224,6 +228,7 @@ class Server {
             return false;
         }
         if (path.startsWith("/api/lights")) { lightsRoute(m, path, body, out); return false; }
+        if (path.startsWith("/api/sound")) { soundRoute(m, path, body, out); return false; }   // also /api/sounds/
         if (path.equals("/api/system")) { reply(out, 200, "application/json", Health.system(c)); return false; }
         if (path.equals("/api/proxy")) { proxy(out, query); return false; }
         if (path.startsWith("/api/photos/")) {
@@ -273,6 +278,46 @@ class Server {
                 default: reply(out, 404, "text/plain", "not found"); return;
             }
             reply(out, 200, "application/json", lights.state());
+        } catch (org.json.JSONException e) { reply(out, 400, "application/json", "{\"ok\":false}"); }
+    }
+
+    /** ElevenLabs takes and the sound board (Sound.java). The API key is never sent back. */
+    void soundRoute(String m, String path, byte[] body, OutputStream out) throws IOException {
+        try {
+            if (path.startsWith("/api/sounds/") && m.equals("GET")) {
+                File f = sound.file(path.substring(12));
+                if (f == null) reply(out, 400, "text/plain", "bad name"); else file(out, f);
+                return;
+            }
+            if (path.startsWith("/api/sound/file/") && m.equals("DELETE")) {
+                File f = sound.file(path.substring(16));
+                if (f == null) { reply(out, 400, "text/plain", "bad name"); return; }
+                f.delete();
+                reply(out, 200, "application/json", sound.state());
+                send("data: sound:files\n\n");
+                return;
+            }
+            if (path.equals("/api/sound") && m.equals("GET")) { reply(out, 200, "application/json", sound.state()); return; }
+            if (path.equals("/api/sound/credits") && m.equals("GET")) { reply(out, 200, "application/json", sound.credits()); return; }
+            org.json.JSONObject b = new org.json.JSONObject(body.length == 0 ? "{}" : new String(body, StandardCharsets.UTF_8));
+            if (path.equals("/api/sound/key") && m.equals("PUT")) {
+                if (!sound.setKey(b.optString("key"))) { reply(out, 400, "application/json", "{\"ok\":false,\"error\":\"That doesn't look like an API key\"}"); return; }
+                reply(out, 200, "application/json", sound.state());
+                return;
+            }
+            if (path.equals("/api/sound/generate") && m.equals("POST")) {
+                String err = sound.generate(b);
+                if (err == null) { reply(out, 200, "application/json", "{\"ok\":true}"); send("data: sound:files\n\n"); }
+                else reply(out, 200, "application/json", new org.json.JSONObject().put("ok", false).put("error", err).toString());
+                return;
+            }
+            if (path.equals("/api/sound/play") && m.equals("POST")) {
+                String id = b.optString("id").replaceAll("[^a-z0-9-]", ""), v = b.optString("variant").replaceAll("[^a-z0-9-]", "");
+                reply(out, 200, "application/json", "{\"ok\":true}");
+                send("data: sound:play:" + id + ":" + v + "\n\n");
+                return;
+            }
+            reply(out, 404, "text/plain", "not found");
         } catch (org.json.JSONException e) { reply(out, 400, "application/json", "{\"ok\":false}"); }
     }
 
@@ -379,6 +424,7 @@ class Server {
         if (n.endsWith(".png")) return "image/png";
         if (n.endsWith(".svg")) return "image/svg+xml";
         if (n.endsWith(".woff2")) return "font/woff2";
+        if (n.endsWith(".mp3")) return "audio/mpeg";
         return "application/octet-stream";
     }
 }
