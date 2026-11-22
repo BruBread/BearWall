@@ -1645,7 +1645,7 @@ function onUpdating(st) {
  *          detail, say: [voice line ids], key, until: ms, at: ms (when it last became new) }.
  * urgent interrupts, heads pops once per key, ambient rotates, base = a never-blank default (Now & Next, All clear, the date…). */
 const feed = new Map();
-let slept = [], spot = null, debriefing = false, focusOn = false;
+let slept = [], spot = null, debriefing = false, focusOn = false, poweringAt = 0;
 function card(c) {
   const old = feed.get(c.id), key = c.key == null ? c.title + '|' + c.detail : c.key;
   const n = Object.assign({ tier: 'ambient', source: 'time', kind: 'text', icon: '', title: '', detail: '' }, c, { key, at: old && old.key === key ? old.at : Date.now() });
@@ -1903,9 +1903,17 @@ window.BearWall = {
   },
   // the projector app calls these when the remote's POWER button sleeps / wakes the projector
   // asleep = silent: the sleep sound plays, then sound.js stops the ambience; waking brings it back
+  // POWER (a short press while the wall is on screen): the projector app calls this ~2.5 s before the panel goes dark
+  powerDown() {
+    if (!stage || sleeping) return;
+    poweringAt = Date.now();
+    snd('power-down'); say('sleep', { force: true, delay: 300 });
+    return window.BearWallIntro && BearWallIntro.powerDown(stage, S.motion, { corners: secCorners });
+  },
   sleep() {
     if (!stage) return;
-    snd('sleep'); say('sleep', { force: true, delay: 150 }); sleeping = true; window.BearWallSound && BearWallSound.sleep();
+    if (Date.now() - poweringAt > 6000) { snd('sleep'); say('sleep', { force: true, delay: 150 }); }   // no power-down just before: say it now
+    sleeping = true; window.BearWallSound && BearWallSound.sleep();
     window.BearWallIntro && BearWallIntro.cancel(); stage.style.visibility = 'hidden';
   },
   wake() {
@@ -1926,7 +1934,9 @@ window.BearWall = {
   mainDynamic: () => (L.widgets.find(w => w.type === 'dynamic' && isMainDynamic(w.id)) || {}).id || null,
   get update() { return upd; }, checkUpdate: () => checkUpdate(), startUpdate: () => startUpdate(),
   focus(on, keepId) {   // the Timer: every other widget fades away while it's set and running
+    const was = focusOn;
     focusOn = !!on; stage.classList.toggle('bw-focus', focusOn);
+    if (was && !focusOn) wallEl.querySelectorAll('.widget:not(.bw-keep)').forEach(el => el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 600 }));   // and fade back
     wallEl.querySelectorAll('.widget.bw-keep').forEach(e => e.classList.remove('bw-keep'));
     if (on && keepId) { const el = wallEl.querySelector(`.widget[data-wid="${keepId}"]`); if (el) el.classList.add('bw-keep'); }
   },

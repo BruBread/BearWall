@@ -68,12 +68,20 @@ public class WallActivity extends Activity {
         ui.postDelayed(lightCheck, 500);
         // only holders of DUMP (the adb shell, root scripts like the power daemon) can ask for a sound
         registerReceiver(soundRx, new IntentFilter("com.bearwall.SOUND"), "android.permission.DUMP", null);
+        // the POWER script (root) says the panel goes dark in ~2.5 s: play the power-down animation first
+        registerReceiver(powerRx, new IntentFilter("com.bearwall.POWERDOWN"), "android.permission.DUMP", null);
         IntentFilter vf = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
         vf.addAction("android.media.STREAM_MUTE_CHANGED_ACTION");
         registerReceiver(volRx, vf);
     }
 
-    @Override protected void onDestroy() { unregisterReceiver(soundRx); unregisterReceiver(volRx); super.onDestroy(); }
+    @Override protected void onDestroy() { unregisterReceiver(soundRx); unregisterReceiver(volRx); unregisterReceiver(powerRx); super.onDestroy(); }
+
+    final BroadcastReceiver powerRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
+        wv.evaluateJavascript("window.BearWall && BearWall.powerDown && BearWall.powerDown()", null);
+    }};
+    // filesDir/front = "1" while the wall is on screen: the POWER script only waits for the animation then (HDMI etc. sleep at once)
+    void setFront(boolean on) { try { Files.write(new File(getFilesDir(), "front"), on ? "1" : "0"); } catch (Exception ignored) { } }
 
     // am broadcast -a com.bearwall.SOUND --es id flip   (the power daemon, when the picture turns 180)
     final BroadcastReceiver soundRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
@@ -101,8 +109,8 @@ public class WallActivity extends Activity {
         else { wv.onResume(); wv.resumeTimers(); }
     }
 
-    @Override protected void onResume() { super.onResume(); resumed = true; applyPause(); hideBars(); holdVolume.run(); }
-    @Override protected void onPause() { resumed = false; applyPause(); super.onPause(); }
+    @Override protected void onResume() { super.onResume(); resumed = true; applyPause(); hideBars(); holdVolume.run(); setFront(true); }
+    @Override protected void onPause() { resumed = false; setFront(false); applyPause(); super.onPause(); }
 
     @Override
     public void onWindowFocusChanged(boolean focus) {

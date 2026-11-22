@@ -264,8 +264,7 @@ const CSS = `
   .w-dynamic .up-tx span { display: block; color: var(--w-dim); font-size: calc(var(--u) * 7 * var(--fit, 1)); margin-top: calc(var(--u) * 2); }
   .w-dynamic .up-tx small { display: block; color: var(--ring); font-size: calc(var(--u) * 6); margin-top: calc(var(--u) * 4); }
   /* focus: everything else fades; the widget grows into its section */
-  .stage.bw-focus .widget:not(.bw-keep) { opacity: 0; transition: opacity .6s; }
-  .stage .widget { transition: opacity .6s; }
+  .stage.bw-focus .widget:not(.bw-keep) { opacity: 0; transition: opacity .6s; }   /* only while the Timer opens: never at startup (that flashed the widgets) */
   .widget.bw-grow { transform: var(--grow) !important; transition: transform .7s cubic-bezier(.2, .8, .3, 1); z-index: 5; }
   .widget.bw-keep:not(.bw-grow) { transition: transform .5s ease-in; }`;
 const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);

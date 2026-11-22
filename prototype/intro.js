@@ -145,7 +145,7 @@
   }
 
   function play(stage, motion, opts) {
-    cleanup();
+    cleanup(); endPower();   // waking up after a power-down: the dark stage comes back
     const t = T[motion], sections = stage ? [...stage.querySelectorAll('.section:not(.win-off)')] : [];
     if (!t || !sections.length) return Promise.resolve();
     css();
@@ -277,19 +277,30 @@
     css();
     const u = cur = up = { stage, timers: [], anims: [], nodes: [], text, screen: null };
     snd('power-down');
-    const sections = [...stage.querySelectorAll('.section')], first = sections[0];
+    const first = stage.querySelector('.section');
     const t = T[motion] && !T[motion].fade ? T[motion] : null;
     if (!t) {   // calm / off: no show, just the screen
+      const sections = [...stage.querySelectorAll('.section')], first = sections[0];
       sections.slice(1).forEach(sec => anim(sec, [{ opacity: 0 }, { opacity: 0 }], { duration: 1, fill: 'forwards' }));
       stage.querySelectorAll('.widget').forEach(w => anim(w, [{ opacity: 0 }, { opacity: 0 }], { duration: 1, fill: 'forwards' }));
       return screen(u, first || stage);
     }
+    const t1 = reverse(stage, opts, true);
+    // 4. the "Updating" screen on the first section (or the middle of the wall with no sections)
+    later(t1 + 1000, () => screen(u, first || stage));
+  }
+
+  // The intro in reverse (update screen and POWER): widgets un-print bottom up, section borders flicker out and the sections
+  // go dark (all but the first when keepFirst), the power traces pull back into the centre and wink out.
+  // Records into `cur`; returns when the borders start (the traces take ~1 s after that).
+  function reverse(stage, opts, keepFirst) {
+    const sections = [...stage.querySelectorAll('.section')];
     // 1. widgets un-print, bottom up, last first: a black cover grows up over each
     const widgets = order([...stage.querySelectorAll('.widget')], stage.clientHeight).reverse();
     const wg = Math.min(45, 600 / Math.max(1, widgets.length));
     widgets.forEach((el, k) => {
       const c = div(el, 'bw-cover');
-      u.nodes.push(c);
+      cur.nodes.push(c);
       anim(c, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 380, delay: k * wg, easing: 'cubic-bezier(.6, 0, .6, 1)', fill: 'both' });
       anim(el, [{ opacity: 1 }, { opacity: .3 }], { duration: 380, delay: k * wg, fill: 'forwards' });
     });
@@ -302,7 +313,7 @@
       seg(o, 0, 1, w, 1); seg(o, w - 1, 0, w - 1, h); seg(o, 0, h - 1, w, h - 1); seg(o, 1, 0, 1, h);
       anim(o, [{ opacity: 1 }, { opacity: .15, offset: .2 }, { opacity: .9, offset: .35 }, { opacity: .1, offset: .55 }, { opacity: .7, offset: .7 }, { opacity: 0 }],
         { duration: 520, fill: 'forwards' });
-      if (k > 0) anim(sec, [{ opacity: 1 }, { opacity: 0 }], { duration: 420, delay: 120, fill: 'forwards' });
+      if (k > 0 || !keepFirst) anim(sec, [{ opacity: 1 }, { opacity: 0 }], { duration: 420, delay: 120, fill: 'forwards' });
     }));
     // 3. power traces pull back into the centre (each line shrinks toward its start, the far end first), which winks out
     later(t1 + 260, () => {
@@ -315,8 +326,29 @@
       });
       pulse(wall, C, [{ transform: 'scale(2.2)', opacity: 0 }, { transform: 'scale(1)', opacity: 1, offset: .7 }, { transform: 'scale(.1)', opacity: 0 }], { duration: 520, delay: 360, fill: 'both' });
     });
-    // 4. the "Updating" screen on the first section (or the middle of the wall with no sections)
-    later(t1 + 1000, () => screen(u, first || stage));
+    return t1;
+  }
+
+  /* ---------- POWER: the wall powers down (the projector app tells us ~2.5 s before the panel goes dark) ---------- */
+  let pd = null;   // { stage, timers, anims, nodes }
+  function endPower() {
+    if (!pd) return;
+    const p = pd; pd = null;
+    if (cur === p) cur = null;
+    p.timers.forEach(clearTimeout); p.anims.forEach(a => a.cancel()); p.nodes.forEach(n => n.remove());
+  }
+  // -> Promise that resolves when it's all dark (calm / off: a plain fade)
+  function powerDown(stage, motion, opts) {
+    cleanup(); endBlinds(); endUpdate(); endPower();
+    if (!stage) return Promise.resolve();
+    css();
+    const p = cur = pd = { stage, timers: [], anims: [], nodes: [] };
+    return new Promise(done => {
+      const t = T[motion] && !T[motion].fade;
+      if (!t) { anim(stage, [{ opacity: 1 }, { opacity: 0 }], { duration: 600, fill: 'forwards' }); later(620, done); return; }
+      const t1 = reverse(stage, opts, false);
+      later(t1 + 1300, () => { if (pd === p) anim(stage, [{ opacity: 0 }, { opacity: 0 }], { duration: 1, fill: 'forwards' }); done(); });   // dark until the wake intro
+    });
   }
 
   function css() {
@@ -326,5 +358,5 @@
     document.head.appendChild(s);
   }
 
-  window.BearWallIntro = { play, cancel() { cleanup(); endUpdate(); endBlinds(); }, blinds, updating };
+  window.BearWallIntro = { play, cancel() { cleanup(); endUpdate(); endBlinds(); endPower(); }, blinds, updating, powerDown };
 })();
