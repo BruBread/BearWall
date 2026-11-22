@@ -40,6 +40,7 @@ import java.util.zip.ZipInputStream;
  *   GET  /api/system           the projector's stats (Health.java)
  *   GET  /api/proxy?url=       fetches news / storm feeds and the GitHub commit feed for the page (only the hosts listed in PROXY_HOSTS)
  *   PUT/GET/DELETE /api/photos/{id}   uploaded photos
+ *   GET  /api/voice            the voice clips on the projector (names); PUT/GET /api/voice/{id}.mp3 uploads / serves one
  *   POST /api/update           downloads the newest web files from GitHub and swaps them in
  *   POST /api/live             passes the control page's live state (selected section) to the wall; not saved
  *   POST /api/hello, /api/bye  the BearWall Control panel on your laptop unlocks / locks control (see below)
@@ -54,10 +55,11 @@ class Server {
     static final String TAG = "BearWall";
     static final String REPO_ZIP = "https://codeload.github.com/BruBread/BearWall/zip/refs/heads/main";
     static final String[] PROXY_HOSTS = { "newsinfo.inquirer.net", "www.rappler.com", "www.gdacs.org", "github.com" };   // github.com: the commit feed for update checks
-    static final Pattern KEY = Pattern.compile("[a-z]{1,20}"), PHOTO = Pattern.compile("[a-z0-9]{1,40}");
+    static final Pattern KEY = Pattern.compile("[a-z]{1,20}"), PHOTO = Pattern.compile("[a-z0-9]{1,40}"),
+        VOICE = Pattern.compile("[a-z0-9-]{1,40}\\.mp3");
 
     final Context c;
-    final File web, kv, photos;
+    final File web, kv, photos, voice;   // voice: the robot's clips, uploaded from the control page (never in the repo)
     final Map<OutputStream, String> listeners = new ConcurrentHashMap<>();   // event stream -> client address
     volatile String okIp = null;     // the paired laptop that's allowed in right now
     volatile long okUntil = 0;
@@ -72,6 +74,8 @@ class Server {
         photos = new File(c.getFilesDir(), "photos");
         kv.mkdirs();
         photos.mkdirs();
+        voice = new File(c.getFilesDir(), "voice");
+        voice.mkdirs();
         lights = new Lights(c.getFilesDir(), this);
         sound = new Sound(c.getFilesDir());
     }
@@ -237,6 +241,21 @@ class Server {
             File f = new File(photos, id + ".jpg");
             if (m.equals("PUT")) { Files.write(f, body); reply(out, 200, "application/json", "{\"ok\":true}"); }
             else if (m.equals("DELETE")) { f.delete(); reply(out, 200, "application/json", "{\"ok\":true}"); }
+            else file(out, f);
+            return false;
+        }
+        if (path.equals("/api/voice")) {
+            String[] names = voice.list();
+            org.json.JSONArray a = new org.json.JSONArray();
+            if (names != null) for (String n : names) if (VOICE.matcher(n).matches()) a.put(n);
+            reply(out, 200, "application/json", a.toString());
+            return false;
+        }
+        if (path.startsWith("/api/voice/")) {
+            String n = path.substring(11);
+            if (!VOICE.matcher(n).matches() || body.length > 2 * 1024 * 1024) { reply(out, 400, "text/plain", "bad clip"); return false; }
+            File f = new File(voice, n);
+            if (m.equals("PUT")) { Files.write(f, body); reply(out, 200, "application/json", "{\"ok\":true}"); }
             else file(out, f);
             return false;
         }

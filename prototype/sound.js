@@ -9,7 +9,7 @@
 (function () {
 const ON = BearWall.onProjector, WALL = /^\/wall/.test(location.pathname);
 const SILENT = ON && !WALL;   // the projector's control page (your laptop) never plays; it asks the wall to
-const TYPES = [['ambience', 'Ambience'], ['ui', 'UI sounds'], ['alert', 'Alerts']];
+const TYPES = [['ambience', 'Ambience'], ['ui', 'UI sounds'], ['alert', 'Alerts'], ['voice', 'Voice']];
 const TEST = { ambience: 'amb-rain', ui: 'light-on', alert: 'alert-info' };   // what the Test row plays
 const DB_PER_STEP = 3;   // calibration knob: each step below 13 is this many dB quieter
 const gainOf = step => step <= 0 ? 0 : Math.pow(10, -(13 - step) * DB_PER_STEP / 20);
@@ -27,7 +27,7 @@ const CLIENT = Math.random().toString(36).slice(2, 10);
 
 /* ---------- settings ---------- */
 const DEFAULTS = { on: true, master: 13, bell: true,
-  types: { ambience: { on: true, level: 9 }, ui: { on: true, level: 11 }, alert: { on: true, level: 13 } },
+  types: { ambience: { on: true, level: 9 }, ui: { on: true, level: 11 }, alert: { on: true, level: 13 }, voice: { on: true, level: 13 } },
   quiet: { on: true, from: '23:30', to: '07:00', ambience: 9, other: 6 },
   pick: {} };
 const isObj = o => o && typeof o === 'object' && !Array.isArray(o);
@@ -198,6 +198,131 @@ function startLayer(c, id, e) {
   return layer;
 }
 
+/* ---------- the voice: the robot's clips, through the robot chain tuned by ear in Voice Lab ----------
+ * Clips live on the projector (/api/voice/<id>.mp3, uploaded from the Sound card; never in the repo).
+ * say('boot') picks one of boot-1, boot-2, ... at random; say(['window-open', 'wx-rain']) speaks them in a row.
+ * One line at a time (urgent lines jump the queue), the same line at most once per 5 min, never during quiet hours
+ * unless opts.anyTime (the alarm and goodnight, later). Ambience dips while he talks. */
+const VOICE = { pitch: 1.12, tin: .44, tinMs: 4.9, ring: .29, ringHz: 45, grit: .25, lowcut: 200, presence: 3, glitch: .5, level: 1.47 };
+const MOODS = {
+  alert: /^(net-down|net-slow|hot|storage-full|wifi-unknown|adb-unknown|security-found|storm|typhoon|bulb-lost|update-failed|build-fail|laptop-low|phone-unknown|wx-thunder-close)$/,
+  happy: /^(home-welcome|home-phone|home-long-day|pasok|update-done|weekend|friday|christmas.*|new-year|birthday|focus-done|build-ok|net-up|bulb-back|game-on|alarm-rise|sem-first-day)$/,
+  sleep: /^(sleep-\d|goodnight|home-away|light-mode-off|light-mode-leave)$/,
+  wake: /^(boot-\d|wake-.*|home-away-end|light-mode-on)$/
+};
+const moodOf = id => Object.keys(MOODS).find(m => MOODS[m].test(id)) || 'neutral';
+const COOLDOWN = 5 * 60e3, rnd = (a, b) => a + Math.random() * (b - a);
+let voiceFiles = new Set(), voiceAt = 0, speaking = false, queue = [];
+const lastSaid = {}, clipCache = new Map();   // decoded clips, a few at a time (~0.2 MB each decoded; all 141 would be ~30 MB)
+function loadVoice() {
+  if (!ON) return Promise.resolve();
+  voiceAt = Date.now();
+  return fetch('/api/voice', { cache: 'no-store' }).then(r => r.json()).then(a => { voiceFiles = new Set(a); renderCard(); }).catch(() => {});
+}
+// base id -> a clip name: the exact one, or one of its numbered alternates
+function pickClip(id) {
+  if (voiceFiles.has(id + '.mp3')) return id + '.mp3';
+  const alts = [...voiceFiles].filter(n => n.indexOf(id + '-') === 0 && /^\d+\.mp3$/.test(n.slice(id.length + 1)));
+  return alts.length ? alts[Math.random() * alts.length | 0] : null;
+}
+function clip(name) {
+  if (!clipCache.has(name)) {
+    clipCache.set(name, fetch('/api/voice/' + name).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then(b => audio().decodeAudioData(b)).catch(e => { clipCache.delete(name); throw e; }));
+    if (clipCache.size > 16) clipCache.delete(clipCache.keys().next().value);
+  }
+  return clipCache.get(name);
+}
+function say(ids, opts) {
+  opts = opts || {};
+  ids = [].concat(ids);
+  if (SILENT || !S.on || !S.types.voice.on || (asleep && !opts.critical) || (quietNow() && !opts.anyTime)) return;   // force skips only the cooldown
+  if (!opts.force && ids.every(id => Date.now() - (lastSaid[id] || 0) < COOLDOWN)) return;
+  ids.forEach(id => { lastSaid[id] = Date.now(); });
+  if (!ids.some(pickClip) && Date.now() - voiceAt > 30000) loadVoice();   // maybe just uploaded
+  if (opts.urgent) queue.unshift(ids); else if (queue.length < 3) queue.push(ids);
+  if (!speaking) setTimeout(speakNext, opts.delay == null ? 350 : opts.delay);   // the event's sound effect goes first
+}
+async function speakNext() {
+  if (speaking || !queue.length) return;
+  speaking = true;
+  const ids = queue.shift();
+  duck(true);
+  for (const id of ids) {
+    const name = pickClip(id);
+    if (!name) continue;
+    try { const b = await clip(name); await new Promise(r => setTimeout(r, voiceLine(b, name.replace(/\.mp3$/, '')) * 1000 + 120)); } catch (e) {}
+  }
+  duck(false);
+  speaking = false;
+  if (queue.length) setTimeout(speakNext, 250);
+}
+function duck(on) {   // ambience dips while he talks
+  if (!ctx) return;
+  buses.ambience.gain.setTargetAtTime(gainOf(levelOf('ambience')) * (on ? .35 : 1), ctx.currentTime, .15);
+}
+let gritCurve = null;
+function curveFor(g) {   // stepped curve: fewer levels = rougher digital voice
+  if (gritCurve) return gritCurve;
+  const n = 1024, L = 4 + (1 - g) * 40;
+  gritCurve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; gritCurve[i] = x * (1 - g) + Math.round(x * L) / L * g; }
+  return gritCurve;
+}
+let vNoise = null;
+function voiceNoise(c) {
+  if (vNoise) return vNoise;
+  vNoise = c.createBuffer(1, c.sampleRate, c.sampleRate);
+  const d = vNoise.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return vNoise;
+}
+// one clip through the robot: pitch, tin can (comb), ring mod, grit, little-speaker EQ, plus random glitches by mood.
+// Returns how long it plays (s).
+function voiceLine(buf, id) {
+  const c = audio(), P = VOICE, mood = moodOf(id), rate = P.pitch, g = P.glitch * (mood === 'alert' ? 1.8 : mood === 'neutral' ? 1 : .7);
+  const t0 = c.currentTime + .05, len = buf.duration / rate, nodes = [], mk = n => (nodes.push(n), n);
+  const input = mk(c.createGain()), gate = mk(c.createGain());   // gate = dropouts
+  input.connect(gate);
+  const can = mk(c.createGain()), dl = mk(c.createDelay(.05)), fb = mk(c.createGain()), wet = mk(c.createGain());
+  dl.delayTime.value = P.tinMs / 1000; fb.gain.value = .45 + P.tin * .4; wet.gain.value = P.tin;
+  gate.connect(can); gate.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(can);
+  const ring = mk(c.createGain()), mod = mk(c.createGain()), rwet = mk(c.createGain()), rdry = mk(c.createGain()), osc = mk(c.createOscillator());
+  mod.gain.value = 0; osc.frequency.value = P.ringHz; osc.connect(mod.gain);
+  rwet.gain.value = P.ring * 1.4; rdry.gain.value = 1 - P.ring * .6;
+  can.connect(mod); mod.connect(rwet); rwet.connect(ring); can.connect(rdry); rdry.connect(ring);
+  const sh = mk(c.createWaveShaper()); sh.curve = curveFor(P.grit);
+  const hp = mk(c.createBiquadFilter()); hp.type = 'highpass'; hp.frequency.value = P.lowcut; hp.Q.value = .7;
+  const pk = mk(c.createBiquadFilter()); pk.type = 'peaking'; pk.frequency.value = 2600; pk.Q.value = 1; pk.gain.value = P.presence;
+  const lim = mk(c.createDynamicsCompressor()); lim.threshold.value = -6; lim.ratio.value = 12; lim.attack.value = .003; lim.release.value = .1;
+  const out = mk(c.createGain()); out.gain.value = P.level;
+  ring.connect(sh); sh.connect(hp); hp.connect(pk); pk.connect(lim); lim.connect(out); out.connect(buses.voice);
+  const src = (off, dur, at) => { const s = mk(c.createBufferSource()); s.buffer = buf; s.playbackRate.value = rate; s.connect(input); s.start(at, off, dur); return s; };
+  let at = t0;
+  if (Math.random() < g * .7) {   // stutter: the first syllable once or twice
+    const seg = rnd(.09, .14), n = Math.random() < .5 ? 1 : 2;
+    for (let i = 0; i < n; i++) { src(0, seg, at); at += seg / rate + .02; }
+  }
+  const r = src(0, undefined, at).playbackRate, end = at + len;
+  if (mood === 'wake') { r.setValueAtTime(rate * .6, at); r.exponentialRampToValueAtTime(rate, at + .25); }
+  if (mood === 'happy') { r.setValueAtTime(rate, end - .18); r.linearRampToValueAtTime(rate * 1.18, end - .02); }
+  if (mood === 'sleep') { r.setValueAtTime(rate, end - .35); r.linearRampToValueAtTime(rate * .55, end + .1); }
+  for (let i = 0; i < Math.round(g * 2.5); i++) { const t = rnd(at + .1, end - .15); r.setValueAtTime(rate * (Math.random() < .5 ? 1.3 : .78), t); r.setValueAtTime(rate, t + .05); }
+  for (let i = 0; i < Math.round(g * 3); i++) {
+    const t = rnd(at + .08, end - .1);
+    gate.gain.setValueAtTime(1, t); gate.gain.linearRampToValueAtTime(0, t + .004); gate.gain.setValueAtTime(0, t + rnd(.02, .04)); gate.gain.linearRampToValueAtTime(1, t + .045);
+  }
+  for (let i = 0; i < Math.round(g * 2); i++) {   // buzz bursts
+    const n = mk(c.createBufferSource()), bp = mk(c.createBiquadFilter()), v = mk(c.createGain()), t = rnd(at, end);
+    n.buffer = voiceNoise(c); bp.type = 'bandpass'; bp.frequency.value = rnd(1800, 4200); bp.Q.value = 3; v.gain.value = .25;
+    n.connect(bp); bp.connect(v); v.connect(out); n.start(t, rnd(0, .5), rnd(.03, .07));
+  }
+  const total = end - c.currentTime + .15;
+  osc.start(t0); osc.stop(t0 + total + .3);
+  hold(total + .5, () => nodes.forEach(n => { try { n.disconnect(); } catch (e) {} }));
+  return total;
+}
+
 /* ---------- volume keys + the bar on the wall (section 1) ---------- */
 let bar = null, barT = null;
 function showBar() {
@@ -214,6 +339,8 @@ function showBar() {
   barT = setTimeout(() => bar.classList.remove('on'), 2000);
 }
 function volKey(k) {
+  if (k === 'up' && S.master === 13 && !muted) say('vol-max');
+  if (k === 'mute' && muted) say('unmuted', { force: true, delay: 200 });
   if (k === 'mute') muted = !muted;
   else { muted = false; S.master = clamp(S.master + (k === 'up' ? 1 : -1), 0, 13); saveLater(1000); }
   applyLevels();
@@ -227,7 +354,7 @@ function event(d) {
   if (d.indexOf('sound:play:') === 0) {
     if (!WALL) return;   // only the wall page plays
     const p = d.split(':');
-    play(p[2], { variant: p[3] || undefined, full: true });
+    if (p[2] === 'say') say(p[3], { force: true, anyTime: true });   // the Test button else play(p[2], { variant: p[3] || undefined, full: true });
   } else if (d === 'sound:files') loadFiles();
   else if (d.indexOf('kv:sound:') === 0 && d.slice(9) !== CLIENT) loadSettings().then(() => { applyLevels(); renderCard(); });
 }
@@ -255,6 +382,9 @@ function buildCard() {
     ${range('quiet.ambience', 'Quiet ambience')}${range('quiet.other', 'Quiet UI + alerts')}
     <div class="lbl"><span>Test</span></div>
     <div class="actions">${TYPES.map(([t, name]) => `<button class="btn quiet" data-test="${t}">${name.split(' ')[0]}</button>`).join('')}</div>
+    <div class="lbl"><span>Voice clips</span><span id="sndVoiceN"></span></div>
+    <div class="actions"><button class="btn quiet" id="sndVoiceUp">Upload voice folder</button><input id="sndVoiceDir" type="file" webkitdirectory multiple hidden></div>
+    <div class="note" id="sndVoiceMsg"></div>
     <div class="lbl"><span>ElevenLabs</span><span id="sndKeyState"></span></div>
     <input class="field" id="sndKey" type="password" autocomplete="off" spellcheck="false" placeholder="API key, stays on the projector">
     <div class="actions"><button class="btn" id="sndKeySave">Save key</button><button class="btn quiet" id="sndCredBtn">Credits</button></div>
@@ -270,12 +400,28 @@ function buildCard() {
   card.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.test) { const id = reg()[TEST[b.dataset.test]] ? TEST[b.dataset.test] : Object.keys(reg()).find(i => reg()[i].type === b.dataset.test); if (id) playThere(id); }
+    if (b.dataset.test === 'voice') ON ? api('POST', '/api/sound/play', { id: 'say', variant: 'boot' }) : say('boot', { force: true, anyTime: true });
+    else if (b.dataset.test) { const id = reg()[TEST[b.dataset.test]] ? TEST[b.dataset.test] : Object.keys(reg()).find(i => reg()[i].type === b.dataset.test); if (id) playThere(id); }
+    else if (b.id === 'sndVoiceUp') $('#sndVoiceDir').click();
     else if (b.id === 'sndKeySave') saveKey();
     else if (b.id === 'sndCredBtn') credits();
   });
+  $('#sndVoiceDir').onchange = e => uploadVoice(e.target.files);
   renderCard();
   if (ON) credits();
+}
+// the voice folder from the laptop -> the projector, one clip at a time (only <id>.mp3 names)
+async function uploadVoice(list) {
+  const fs = [...list].filter(f => /^[a-z0-9-]{1,40}\.mp3$/.test(f.name)), msg = $('#sndVoiceMsg');
+  if (!ON) { msg.textContent = 'Uploading works on the projector.'; return; }
+  let n = 0, bad = 0;
+  for (const f of fs) {
+    msg.textContent = `Uploading ${n + bad + 1} of ${fs.length}…`;
+    const r = await fetch('/api/voice/' + f.name, { method: 'PUT', body: await f.arrayBuffer() }).catch(() => null);
+    if (r && r.ok) n++; else bad++;
+  }
+  msg.textContent = `${n} clips on the projector` + (bad ? `, ${bad} failed` : '') + '.';
+  loadVoice();
 }
 function renderValues() {
   if (!card) return;
@@ -285,6 +431,7 @@ function renderValues() {
 function renderCard() {
   if (!card) return;
   renderValues();
+  $('#sndVoiceN').textContent = ON ? voiceFiles.size + ' on the projector' : 'projector only';
   $('#sndKeyState').textContent = !ON ? 'projector only' : hasKey ? 'Key saved' : 'No key';
   card.querySelectorAll('#sndKey, #sndKeySave, #sndCredBtn').forEach(x => { x.disabled = !ON; });
 }
@@ -312,13 +459,15 @@ function credits() {
   console.assert(m.master === 5 && m.types.ui.level === 3 && m.types.ui.on === true && m.types.alert.level === 13 && m.pick.flip === 'b', 'sound: settings merge');
 })();
 setInterval(applyLevels, 60000);   // quiet hours start and end
-loadSettings().then(() => { applyLevels(); buildCard(); loadFiles(); });
+loadSettings().then(() => { applyLevels(); buildCard(); loadFiles(); loadVoice(); });
 
 window.BearWallSound = {
-  play, ambience, volKey, event,
+  play, ambience, volKey, event, say,
+  _voice(name, buf) { voiceFiles.add(name); clipCache.set(name, Promise.resolve(buf)); },   // headless tests
   sleep() { asleep = true; ambience([]); },
   wake() { asleep = false; },
   get settings() { return S; },
+  get speaking() { return speaking || queue.length > 0; },
   get files() { return files; }
 };
 })();

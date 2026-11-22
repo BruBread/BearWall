@@ -78,7 +78,8 @@ public class WallActivity extends Activity {
     // am broadcast -a com.bearwall.SOUND --es id flip   (the power daemon, when the picture turns 180)
     final BroadcastReceiver soundRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
         String id = i.getStringExtra("id");
-        if (id != null && id.matches("[a-z0-9-]{1,40}")) wv.evaluateJavascript("window.BearWallSound && BearWallSound.play('" + id + "')", null);
+        if (id != null && id.matches("[a-z0-9-]{1,40}"))   // the sound, then his line for it if there is one (flip: "Flipped it!")
+            wv.evaluateJavascript("window.BearWallSound && (BearWallSound.play('" + id + "'), BearWallSound.say('" + id + "', { force: true }))", null);
     }};
 
     final Runnable reload = new Runnable() { public void run() { wv.loadUrl(URL); } };
@@ -88,7 +89,7 @@ public class WallActivity extends Activity {
         boolean off = "0".equals(Files.read(LCD, "255").trim());
         if (off != dark) {
             dark = off;
-            if (dark) { wv.evaluateJavascript("window.BearWall && BearWall.sleep()", null); ui.postDelayed(pauseLater, 300); }   // let the hidden frame draw first
+            if (dark) { wv.evaluateJavascript("window.BearWall && BearWall.sleep()", null); ui.postDelayed(pauseLater, 2500); }   // let the hidden frame draw and "Going to sleep" finish
             else { applyPause(); wv.evaluateJavascript("window.BearWall && BearWall.wake()", null); }
         }
         ui.postDelayed(this, 500);

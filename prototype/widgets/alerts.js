@@ -23,7 +23,11 @@ BearWall.alertModule = (kind, type, styleName, name, spec = {}) => Object.assign
     al.hidden = !a && !idle;
     if (al.hidden) { al._k = ''; return; }
     const lv = a ? a.level : 'ok', k = (a ? a.id || a.title : 'ok') + ':' + lv;
-    if (al._k !== k) { al.className = 'al'; void al.offsetWidth; al._k = k; }   // a new alert restarts its flash
+    if (al._k !== k) {   // a new alert restarts its flash, and he says it
+      al.className = 'al'; void al.offsetWidth; al._k = k;
+      const id = a && a.id ? String(a.id) : '', line = id === 'adb' ? 'adb-unknown' : id === 'malware' ? 'security-found' : id.indexOf('wifi-') === 0 ? 'wifi-unknown' : id === 'speed-slow' ? 'net-slow' : null;
+      if (line) BearWall.say(line, { urgent: a.level === 'critical' });
+    }
     al.className = 'al lv-' + lv;
     al.querySelector('.bd').innerHTML = a && !spec.icon ? MARK : (spec.icon || MARK);
     al.querySelector('.t').textContent = (a || idle).title;

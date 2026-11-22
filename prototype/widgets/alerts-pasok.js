@@ -60,7 +60,7 @@ BearWall.register(Object.assign({}, base, {
     let keywords = keywordsOf(ctx.opts.keywords);
     if (ctx.opts.sample && !keywords.length) keywords = ['your school'];
     const m = match(ctx.opts.sample ? [`Classes suspended in ${keywords[0]} due to heavy rain`] : headlines, keywords);
-    if (m && !heard.has(m.headline)) { heard.add(m.headline); BearWall.sound('pasok'); }
+    if (m && !heard.has(m.headline)) { heard.add(m.headline); BearWall.sound('pasok'); BearWall.say('pasok'); }
     const alerts = m ? [{ id: 'pasok', kind: 'pasok', level: 'critical', title: `Walang pasok · ${m.keyword}`, detail: m.headline, since: new Date() }] : [];
     base.update(el, Object.assign({}, ctx, { alerts }));
   }

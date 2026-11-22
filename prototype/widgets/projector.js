@@ -23,7 +23,10 @@ const stat = (type, styleName, read, options = [], ring = true) => Object.assign
   },
   update(el, ctx) {
     const r = read(ctx.system, ctx.opts, ctx.now.getTime()), ps = el.querySelector('.ps');
-    if (ps._lv !== r.level) { ps.className = 'ps'; void ps.offsetWidth; ps._lv = r.level; }   // a new level restarts its flash
+    if (ps._lv !== r.level) {   // a new level restarts its flash; rising to warning/critical, he says it
+      if (r.level !== 'ok' && (type === 'projector' || type === 'projector-storage')) BearWall.say(type === 'projector' ? 'hot' : 'storage-full');
+      ps.className = 'ps'; void ps.offsetWidth; ps._lv = r.level;
+    }
     ps.className = 'ps lv-' + r.level;
     if (ring) {
       U.setRing(el.querySelector('.ring'), r.pct);

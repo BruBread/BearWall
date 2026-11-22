@@ -89,6 +89,7 @@ const uid = () => Math.random().toString(36).slice(2, 8);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pad = n => String(n).padStart(2, '0');
 const snd = (id, o) => window.BearWallSound && BearWallSound.play(id, o);   // sound.js; silent on the control page
+const say = (ids, o) => window.BearWallSound && BearWallSound.say(ids, o);   // the robot's voice lines (sound.js)
 
 // On the projector the page comes from the BearWall app: /wall is what the projector shows, /control is your laptop.
 // There the layout, settings and device switches live in the app (shared by both, live), not in this browser.
@@ -919,8 +920,15 @@ function toggleWindow() {
   if (!window.BearWallIntro || (ON_PROJECTOR && !WALL_ONLY)) return flip();
   blindsFor(L, !L.windowOn, flip);
 }
+// the weather in one line, for "Window open."
+function wxLine() {
+  const w = weatherNow(timeNow());
+  return { rain: 'wx-rain', thunder: 'wx-thunder', fog: 'wx-fog', cloud: 'wx-cloudy', partly: w.night ? 'wx-clear-night' : 'wx-cloudy' }[w.cond]
+    || (w.night ? 'wx-clear-night' : 'wx-sunny');
+}
 function blindsFor(l, turningOn, flip) {
   const all = l.sections.map(s => s.id);
+  say(turningOn ? ['window-open', wxLine()] : 'window-closed', { force: true });   // you pressed it: always answer
   BearWallIntro.blinds(stage, all, flip, S.motion, turningOn ? windowSids(l) : all);
 }
 const windowSids = l => l.sections.filter(s => s.bg !== 'none' && bgTypes[s.bg]).map(s => s.id);
@@ -1265,14 +1273,18 @@ const ALERT_SOUND = { info: 'alert-info', warning: 'alert-warn', critical: 'aler
 function setAlert(id, a) {
   const old = alerts.find(x => x.id === id);
   if (old && old.level === a.level && old.title === a.title && old.detail === a.detail) return;
-  if (!old || old.level !== a.level) snd(id === 'net' && a.level === 'critical' ? 'net-down' : a.kind === 'update' ? 'update' : ALERT_SOUND[a.level]);
+  if (!old || old.level !== a.level) {
+    snd(id === 'net' && a.level === 'critical' ? 'net-down' : a.kind === 'update' ? 'update' : ALERT_SOUND[a.level]);
+    if (id === 'net') say(a.level === 'critical' ? 'net-down' : 'net-slow', { urgent: a.level === 'critical' });
+    else if (a.kind === 'update') say('update-available');
+  }
   alerts = alerts.filter(x => x.id !== id).concat(Object.assign({ id, since: old ? old.since : new Date() }, a));
   render();
 }
 function clearAlert(id) {
   const old = alerts.find(x => x.id === id);
   if (!old) return;
-  if (id === 'net' && old.level === 'critical') snd('net-up');
+  if (id === 'net' && old.level === 'critical') { snd('net-up'); say('net-up'); }
   alerts = alerts.filter(x => x.id !== id); render();
 }
 
@@ -1295,7 +1307,7 @@ function soundTick() {
   const S2 = window.BearWallSound;
   if (!S2 || sleeping) return;
   const h = new Date().getHours();
-  if (h !== bellHour) { bellHour = h; if (S2.settings.bell) S2.play('hour-bell', { hour: h }); }
+  if (h !== bellHour) { bellHour = h; if (S2.settings.bell) { S2.play('hour-bell', { hour: h }); say('hour-' + (h % 12 || 12), { delay: 2600 }); } }
   const layers = ambienceFor(weatherNow(timeNow())), k = JSON.stringify(layers);
   if (k !== ambKey) { ambKey = k; S2.ambience(layers); }
 }
@@ -1484,6 +1496,8 @@ function selfTest() {
     ok(ids({ cond: 'thunder', night: true }) === 'amb-rain,amb-thunder,amb-crickets,amb-waves' && ids({ cond: 'clear', night: false }) === 'amb-birds,amb-waves', 'window ambience follows weather, time and view');
     L = { windowOn: false, sections: L.sections };
     ok(ids({ cond: 'rain' }) === '', 'no ambience without Window mode');
+    ok(dayLine(new Date(2026, 11, 25)) === 'christmas' && dayLine(new Date(2026, 8, 1)) === 'christmas-season' && dayLine(new Date(2026, 10, 27)) === 'friday'
+      && dayLine(new Date(2026, 10, 1)) === 'new-month' && dayLine(new Date(2026, 10, 24)) === null, 'the day\'s line');
     L = keep;
   }
   const m = migrate({ screens: [{ x: 100, y: 50, widgets: [{ id: 'a', x: 8, y: 16 }] }] });
@@ -1495,16 +1509,45 @@ let updatingNow = false;
 function onUpdating(st) {
   if (!window.BearWallIntro) return;
   updatingNow = st !== 'failed';
+  if (st === 'download') say('update-start', { force: true });
+  if (st === 'failed') say('update-failed', { force: true });
   BearWallIntro.updating(stage, UPD_TEXT[st] || st, S.motion, { corners: secCorners });
   if (st === 'failed') setTimeout(() => { BearWallIntro.cancel(); buildStage(); playIntro(); }, 3000);
 }
+/* ---------- what he says when the wall comes on ---------- */
+// startup: "BearWall online!" (or "Update done." after an update); wake: a wake line. Then the greeting, and once a day
+// the day's line (Friday, weekend, Christmas…).
+function dayLine(d) {
+  const m = d.getMonth() + 1, day = d.getDate(), wd = d.getDay();
+  if (m === 12 && day === 25) return 'christmas';
+  if (m === 1 && day === 1) return 'new-year';
+  if (m === 9 && day === 1) return 'christmas-season';
+  if (day === 1) return 'new-month';
+  return wd === 5 ? 'friday' : wd === 6 || wd === 0 ? 'weekend' : wd === 1 ? 'monday' : null;
+}
+function hello(boot) {
+  const now = new Date(), h = now.getHours(), lines = [];
+  let updated = false;
+  try { updated = sessionStorage.getItem('bearwall.updated') === '1'; sessionStorage.removeItem('bearwall.updated'); } catch (e) {}
+  lines.push(updated ? 'update-done' : boot ? 'boot' : h >= 5 && h < 11 && Math.random() < .5 ? 'wake-morning' : 'wake');
+  lines.push(h >= 5 && h < 12 ? 'greet-morning' : h < 18 && h >= 12 ? 'greet-afternoon' : 'greet-evening');
+  let today = now.toDateString(), last = null;
+  try { last = localStorage.getItem('bearwall.voiceDay'); localStorage.setItem('bearwall.voiceDay', today); } catch (e) {}
+  const dl = last !== today && dayLine(now);
+  if (dl) lines.push(dl);
+  say(lines, { force: true, delay: 0 });
+}
+
 /* ---------- public API ---------- */
 let booted = false;
 // the app tells pages when the other side saved something ("kv:layout:<client>") or after an update ("reload")
 function listen() {
   const es = new EventSource('/api/events');
   es.onmessage = e => {
-    if (e.data === 'reload') return updatingNow ? setTimeout(() => location.reload(), 900) : location.reload();   // let "Restarting" show
+    if (e.data === 'reload') {
+      if (updatingNow) { try { sessionStorage.setItem('bearwall.updated', '1'); } catch (err) {} }   // "Update done." after the reload
+      return updatingNow ? setTimeout(() => location.reload(), 900) : location.reload();   // let "Restarting" show
+    }
     if (e.data.startsWith('updating:')) return WALL_ONLY && onUpdating(e.data.slice(9));
     if (e.data === 'lights') return window.BearWallLights && BearWallLights.refresh();   // the bulb changed (Lights.java)
     if (e.data.startsWith('sound:') || e.data.startsWith('kv:sound:')) return window.BearWallSound && BearWallSound.event(e.data);
@@ -1591,7 +1634,7 @@ window.BearWall = {
     normalize();
     bindStage(); bindControls();
     buildStage();
-    playIntro();   // sections light up, then the widgets load in
+    Promise.resolve(playIntro()).then(() => hello(true));   // sections light up, the widgets load in, then he says hi
     fetchWeather();
     setInterval(fetchWeather, 10 * 60 * 1000);
     checkNet(); setInterval(checkNet, 30 * 1000);
@@ -1610,14 +1653,15 @@ window.BearWall = {
   // asleep = silent: the sleep sound plays, then sound.js stops the ambience; waking brings it back
   sleep() {
     if (!stage) return;
-    snd('sleep'); sleeping = true; window.BearWallSound && BearWallSound.sleep();
+    snd('sleep'); say('sleep', { force: true, delay: 150 }); sleeping = true; window.BearWallSound && BearWallSound.sleep();
     window.BearWallIntro && BearWallIntro.cancel(); stage.style.visibility = 'hidden';
   },
   wake() {
     if (!stage) return;
     sleeping = false; ambKey = ''; window.BearWallSound && BearWallSound.wake(); snd('wake');
-    stage.style.visibility = ''; buildStage(); playIntro(); fetchWeather();
+    stage.style.visibility = ''; buildStage(); Promise.resolve(playIntro()).then(() => hello(false)); fetchWeather();
   },
+  say,   // BearWall.say(ids, opts) for widgets and lights.js
   sound: snd,   // BearWall.sound(id, opts) for widgets and lights.js
   _test: { homography, applyH, validQuad, inQuad, localToPanel, panelToLocal, get inside() { return inside; }, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };

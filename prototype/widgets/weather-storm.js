@@ -59,7 +59,7 @@ async function load() {
       || (f.bbox && f.bbox[2] >= 115 && f.bbox[0] <= 135 && f.bbox[3] >= 5 && f.bbox[1] <= 25)));
     if (!f) { storm = null; return redraw(); }
     const p = f.properties, gk = p.eventid + '-' + p.episodeid;
-    if (heard !== p.eventid) { heard = p.eventid; BearWall.sound('storm'); }   // a storm newly inside PAR
+    if (heard !== p.eventid) { heard = p.eventid; BearWall.sound('storm'); BearWall.say('storm', { urgent: true }); }   // a storm newly inside PAR
     if (!geoCache[gk]) {
       const g = await (await fetch(p.url.geometry)).json();
       const feats = g.features || [];

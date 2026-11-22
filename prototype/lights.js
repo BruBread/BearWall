@@ -184,7 +184,7 @@ function renderHud() {
   hud.querySelector('small').textContent = l.mode === 'colour' ? '◀ ▶ scene · VOL brightness · ▲ ▼ colour · OK on/off' : '◀ ▶ scene · VOL brightness · ▲ ▼ warmth · OK on/off';
 }
 function lightMode(on) {
-  if (!!on !== mode) BearWall.sound(on ? 'light-on' : 'light-off');   // the app re-sends "on" with each press to restart its timer
+  if (!!on !== mode) { BearWall.sound(on ? 'light-on' : 'light-off'); BearWall.say(on ? 'light-mode-on' : 'light-mode-off', { force: true }); }   // the app re-sends "on" with each press to restart its timer
   mode = !!on;
   if (mode) BearWall.hud(hudEl());
   hudEl().classList.toggle('on', mode);
@@ -207,7 +207,7 @@ function lightKey(k) {
     const d = k === 'up' ? 1 : -1;   // up = warmer white / hue forward
     BearWall.sound('light-tick');
     send('light', l.mode === 'colour' ? { on: true, h: (l.h + 20 * d + 360) % 360 } : { on: true, temp: clamp(l.temp - 100 * d, 0, 1000) });
-  } else if (k === 'ok') { BearWall.sound(l.on ? 'light-off' : 'light-on'); send('light', { on: !l.on }); }
+  } else if (k === 'ok') { BearWall.sound(l.on ? 'light-off' : 'light-on'); BearWall.say(l.on ? 'lights-off' : 'lights-on', { force: true }); send('light', { on: !l.on }); }
 }
 
 function render() { renderPage(); renderHud(); }
