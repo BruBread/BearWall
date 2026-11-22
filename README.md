@@ -43,10 +43,6 @@ The full design is in [`docs/PLAN.md`](docs/PLAN.md).
 3. **Phase 3:** the rest of the standalone widgets (clock, calendar, countdown, sun and moon, and more).
 4. **Phase 4:** the rest of the PC widgets.
 
-## Private values
-
-Anything personal (projector and PC IP addresses, home city, names) goes in `local.json`, which is gitignored. It never goes in the code.
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
