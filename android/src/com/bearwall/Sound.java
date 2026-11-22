@@ -116,7 +116,7 @@ final class Sound {
                 if (!m.isEmpty()) msg = m;
             }
         } catch (Exception ignored) { }
-        if (code == 401) msg = "The key was refused (" + msg + ")";
+        if (code == 401 && !msg.contains("permission")) msg = "The key was refused (" + msg + ")";   // a missing permission says so itself
         msg = msg.replace(key, "…");
         return msg.length() > 300 ? msg.substring(0, 300) : msg;
     }

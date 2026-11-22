@@ -68,9 +68,12 @@ public class WallActivity extends Activity {
         ui.postDelayed(lightCheck, 500);
         // only holders of DUMP (the adb shell, root scripts like the power daemon) can ask for a sound
         registerReceiver(soundRx, new IntentFilter("com.bearwall.SOUND"), "android.permission.DUMP", null);
+        IntentFilter vf = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
+        vf.addAction("android.media.STREAM_MUTE_CHANGED_ACTION");
+        registerReceiver(volRx, vf);
     }
 
-    @Override protected void onDestroy() { unregisterReceiver(soundRx); super.onDestroy(); }
+    @Override protected void onDestroy() { unregisterReceiver(soundRx); unregisterReceiver(volRx); super.onDestroy(); }
 
     // am broadcast -a com.bearwall.SOUND --es id flip   (the power daemon, when the picture turns 180)
     final BroadcastReceiver soundRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
@@ -97,7 +100,7 @@ public class WallActivity extends Activity {
         else { wv.onResume(); wv.resumeTimers(); }
     }
 
-    @Override protected void onResume() { super.onResume(); resumed = true; applyPause(); hideBars(); }
+    @Override protected void onResume() { super.onResume(); resumed = true; applyPause(); hideBars(); holdVolume.run(); }
     @Override protected void onPause() { resumed = false; applyPause(); super.onPause(); }
 
     @Override
@@ -139,6 +142,37 @@ public class WallActivity extends Activity {
         }
     }
 
+    // The system media volume stays at 13 (the ceiling) and unmuted; BearWall does its own levels.
+    final Runnable holdVolume = new Runnable() { public void run() {
+        ((android.media.AudioManager) getSystemService(AUDIO_SERVICE)).setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 13, 0);   // also unmutes
+    }};
+
+    // On this TV build the window manager takes the remote's VOL and MUTE keys and changes the system volume itself;
+    // the app never sees them. So the wall watches the system volume: while it's up, a step away from 13 is a BearWall
+    // volume step (bulb brightness in Light mode), a mute is BearWall's mute, and the system goes straight back to 13.
+    // Other apps (HDMI, Moonlight) keep normal volume keys. Our own reset (to 13, unmuted) is ignored.
+    long volAt;
+    final BroadcastReceiver volRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
+        if (!resumed || i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1) != android.media.AudioManager.STREAM_MUSIC) return;
+        String key = null;
+        if ("android.media.STREAM_MUTE_CHANGED_ACTION".equals(i.getAction())) {
+            if (i.getBooleanExtra("android.media.EXTRA_STREAM_VOLUME_MUTED", false)) key = "mute";
+        } else {
+            int v = i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_VALUE", 13);
+            if (v != 13 && v != 0) key = v > 13 ? "up" : "down";   // 0 comes with a mute, handled above
+        }
+        if (key == null) return;
+        holdVolume.run();
+        long now = android.os.SystemClock.uptimeMillis();
+        if (!key.equals("mute") && now - volAt < 120) return;   // ponytail: one press can report twice; caps holds at ~8 steps/s
+        volAt = now;
+        if (lightMode) {
+            if (key.equals("mute")) return;
+            setLightMode(true);   // restarts its idle timer
+            wv.evaluateJavascript("window.BearWall && BearWall.lightKey && BearWall.lightKey('vol" + key + "')", null);
+        } else wv.evaluateJavascript("window.BearWallSound && BearWallSound.volKey('" + key + "')", null);
+    }};
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
@@ -158,13 +192,6 @@ public class WallActivity extends Activity {
                 }
                 return true;
             }
-        }
-        // outside Light mode the volume keys drive BearWall's own volume (the system volume stays at 13, the ceiling)
-        String vol = k == KeyEvent.KEYCODE_VOLUME_UP ? "up" : k == KeyEvent.KEYCODE_VOLUME_DOWN ? "down" : k == KeyEvent.KEYCODE_VOLUME_MUTE ? "mute" : null;
-        if (vol != null) {
-            if (down && (e.getRepeatCount() == 0 || !vol.equals("mute")))
-                wv.evaluateJavascript("window.BearWallSound && BearWallSound.volKey('" + vol + "')", null);
-            return true;
         }
         if (k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_SETTINGS) {
             if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
