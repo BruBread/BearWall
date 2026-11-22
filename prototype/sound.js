@@ -210,7 +210,8 @@ const MOODS = {
   sleep: /^(sleep-\d|goodnight|home-away|light-mode-off|light-mode-leave)$/,
   wake: /^(boot-\d|wake-.*|home-away-end|light-mode-on)$/
 };
-const moodOf = id => Object.keys(MOODS).find(m => MOODS[m].test(id)) || 'neutral';
+// net-down-2 has net-down's mood
+const moodOf = id => Object.keys(MOODS).find(m => MOODS[m].test(id) || MOODS[m].test(id.replace(/-\d+$/, ''))) || 'neutral';
 const COOLDOWN = 5 * 60e3, rnd = (a, b) => a + Math.random() * (b - a);
 let voiceFiles = new Set(), voiceAt = 0, speaking = false, queue = [];
 const lastSaid = {}, clipCache = new Map();   // decoded clips, a few at a time (~0.2 MB each decoded; all 141 would be ~30 MB)
@@ -219,11 +220,12 @@ function loadVoice() {
   voiceAt = Date.now();
   return fetch('/api/voice', { cache: 'no-store' }).then(r => r.json()).then(a => { voiceFiles = new Set(a); renderCard(); }).catch(() => {});
 }
-// base id -> a clip name: the exact one, or one of its numbered alternates
+// base id -> a clip name: the exact one or one of its numbered alternates (greet-morning-2, boot-4), never the one it said last time
+const lastPick = {};
 function pickClip(id) {
-  if (voiceFiles.has(id + '.mp3')) return id + '.mp3';
-  const alts = [...voiceFiles].filter(n => n.indexOf(id + '-') === 0 && /^\d+\.mp3$/.test(n.slice(id.length + 1)));
-  return alts.length ? alts[Math.random() * alts.length | 0] : null;
+  const all = [...voiceFiles].filter(n => n === id + '.mp3' || (n.indexOf(id + '-') === 0 && /^\d+\.mp3$/.test(n.slice(id.length + 1))));
+  const pool = all.length > 1 ? all.filter(n => n !== lastPick[id]) : all;
+  return pool.length ? pool[Math.random() * pool.length | 0] : null;
 }
 function clip(name) {
   if (!clipCache.has(name)) {
@@ -256,6 +258,7 @@ async function speakNext() {
   for (const id of ids) {
     const name = pickClip(id);
     if (!name) continue;
+    lastPick[id] = name;
     try { const b = await clip(name); await new Promise(r => setTimeout(r, voiceLine(b, name.replace(/\.mp3$/, '')) * 1000 + 120)); } catch (e) {}
   }
   duck(false);
@@ -463,6 +466,11 @@ function credits() {
     && !inWindow(at(7, 0), '23:30', '07:00') && inWindow(at(13, 0), '12:00', '14:00'), 'sound: quiet hours window');
   const m = merge(DEFAULTS, { master: 5, types: { ui: { level: 3 } }, pick: { flip: 'b' } });
   console.assert(m.master === 5 && m.types.ui.level === 3 && m.types.ui.on === true && m.types.alert.level === 13 && m.pick.flip === 'b', 'sound: settings merge');
+  voiceFiles = new Set(['flip.mp3', 'flip-2.mp3', 'hour-1.mp3', 'hour-10.mp3', 'wake-1.mp3', 'wake-morning.mp3']);
+  lastPick.flip = 'flip.mp3';
+  console.assert(pickClip('flip') === 'flip-2.mp3' && pickClip('hour-1') === 'hour-1.mp3' && pickClip('wake') === 'wake-1.mp3' && pickClip('x') === null, 'sound: voice variants');
+  console.assert(moodOf('net-down-2') === 'alert' && moodOf('boot-4') === 'wake' && moodOf('hour-3') === 'neutral', 'sound: variant moods');
+  voiceFiles = new Set(); delete lastPick.flip;
 })();
 setInterval(applyLevels, 60000);   // quiet hours start and end
 loadSettings().then(() => { applyLevels(); buildCard(); loadFiles(); loadVoice(); });
