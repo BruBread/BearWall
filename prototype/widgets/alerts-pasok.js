@@ -61,6 +61,11 @@ BearWall.register(Object.assign({}, base, {
     if (ctx.opts.sample && !keywords.length) keywords = ['your school'];
     const m = match(ctx.opts.sample ? [`Classes suspended in ${keywords[0]} due to heavy rain`] : headlines, keywords);
     if (m && !heard.has(m.headline)) { heard.add(m.headline); BearWall.sound('pasok'); BearWall.say('pasok'); }
+    // cards for the Dynamic widgets: the suspension (urgent), or "Classes on" for the morning set and the debrief
+    if (m) BearWall.card({ id: 'pasok', source: 'alerts', tier: 'urgent', icon: 'school', title: 'Walang pasok!', detail: m.headline, key: m.headline, say: ['pasok'] });
+    else BearWall.uncard('pasok');
+    if (keywords.length && !m) BearWall.card({ id: 'classes', source: 'alerts', tier: 'base', icon: 'school', title: 'Classes on', detail: 'No suspension news', key: 'on' });
+    else BearWall.uncard('classes');
     const alerts = m ? [{ id: 'pasok', kind: 'pasok', level: 'critical', title: `Walang pasok · ${m.keyword}`, detail: m.headline, since: new Date() }] : [];
     base.update(el, Object.assign({}, ctx, { alerts }));
   }

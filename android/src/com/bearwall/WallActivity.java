@@ -194,6 +194,11 @@ public class WallActivity extends Activity {
                 return true;
             }
         }
+        // OK (outside Light mode): the debrief, BearWall runs through the day out loud
+        if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) {
+            if (down && e.getRepeatCount() == 0) wv.evaluateJavascript("window.BearWall && BearWall.debrief && BearWall.debrief('button')", null);
+            return true;
+        }
         if (k == KeyEvent.KEYCODE_MENU || k == KeyEvent.KEYCODE_SETTINGS) {
             if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
                 if (k == KeyEvent.KEYCODE_MENU) wv.evaluateJavascript("window.BearWall && BearWall.toggleWindow && BearWall.toggleWindow()", null);

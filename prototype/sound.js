@@ -233,20 +233,25 @@ function clip(name) {
   }
   return clipCache.get(name);
 }
+// -> Promise that resolves once the lines have played (at once when they're skipped), so the debrief can follow along
 function say(ids, opts) {
   opts = opts || {};
-  ids = [].concat(ids);
-  if (SILENT || !S.on || !S.types.voice.on || (asleep && !opts.critical) || (quietNow() && !opts.anyTime)) return;   // force skips only the cooldown
-  if (!opts.force && ids.every(id => Date.now() - (lastSaid[id] || 0) < COOLDOWN)) return;
+  ids = [].concat(ids).filter(Boolean);
+  if (!ids.length || SILENT || !S.on || !S.types.voice.on || (asleep && !opts.critical) || (quietNow() && !opts.anyTime)) return Promise.resolve();   // force skips only the cooldown
+  if (!opts.force && ids.every(id => Date.now() - (lastSaid[id] || 0) < COOLDOWN)) return Promise.resolve();
   ids.forEach(id => { lastSaid[id] = Date.now(); });
   if (!ids.some(pickClip) && Date.now() - voiceAt > 30000) loadVoice();   // maybe just uploaded
-  if (opts.urgent) queue.unshift(ids); else if (queue.length < 3) queue.push(ids);
-  if (!speaking) setTimeout(speakNext, opts.delay == null ? 350 : opts.delay);   // the event's sound effect goes first
+  if (!opts.urgent && queue.length >= 3) return Promise.resolve();
+  return new Promise(done => {
+    const item = { ids, done };
+    if (opts.urgent) queue.unshift(item); else queue.push(item);
+    if (!speaking) setTimeout(speakNext, opts.delay == null ? 350 : opts.delay);   // the event's sound effect goes first
+  });
 }
 async function speakNext() {
   if (speaking || !queue.length) return;
   speaking = true;
-  const ids = queue.shift();
+  const { ids, done } = queue.shift();
   duck(true);
   for (const id of ids) {
     const name = pickClip(id);
@@ -255,6 +260,7 @@ async function speakNext() {
   }
   duck(false);
   speaking = false;
+  done();
   if (queue.length) setTimeout(speakNext, 250);
 }
 function duck(on) {   // ambience dips while he talks

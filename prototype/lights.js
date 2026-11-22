@@ -212,7 +212,8 @@ function lightKey(k) {
 
 function render() { renderPage(); renderHud(); }
 
-window.BearWallLights = { get state() { return state; }, refresh, mode: lightMode, key: lightKey, swatch };
+window.BearWallLights = { get state() { return state; }, refresh, mode: lightMode, key: lightKey, swatch,
+  scene: () => { const i = state ? sceneOf(state) : -1; return i >= 0 ? state.settings.scenes[i].name : null; } };
 bindPage();
 refresh();
 })();

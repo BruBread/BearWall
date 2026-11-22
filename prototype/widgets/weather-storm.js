@@ -57,9 +57,10 @@ async function load() {
     // current storms whose centre or extent touches PAR
     const f = list.find(f => String(f.properties.iscurrent).toLowerCase() === 'true' && (inside(PAR, f.geometry.coordinates)
       || (f.bbox && f.bbox[2] >= 115 && f.bbox[0] <= 135 && f.bbox[3] >= 5 && f.bbox[1] <= 25)));
-    if (!f) { storm = null; return redraw(); }
+    if (!f) { storm = null; BearWall.uncard('storm'); return redraw(); }
     const p = f.properties, gk = p.eventid + '-' + p.episodeid;
     if (heard !== p.eventid) { heard = p.eventid; BearWall.sound('storm'); BearWall.say('storm', { urgent: true }); }   // a storm newly inside PAR
+    BearWall.card({ id: 'storm', source: 'weather', tier: 'urgent', icon: 'thunder', title: `Storm: ${p.name || p.eventname}`, detail: 'Inside PAR', key: String(p.eventid), say: ['storm'] });
     if (!geoCache[gk]) {
       const g = await (await fetch(p.url.geometry)).json();
       const feats = g.features || [];

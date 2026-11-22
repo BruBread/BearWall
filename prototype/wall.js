@@ -40,6 +40,7 @@
  * Black is no light: keep backgrounds transparent. Strokes >= 2px and text >= ~18px at 1280x720 wall size.
  *
  * ctx = {
+ *   id,          // this widget's id in the layout
  *   mode: 'square' | 'rect', anchor: 'left' | 'right',
  *   opts,        // this widget's option values, by key
  *   now,         // Date. Follows the sample time-of-day slider in Sample mode.
@@ -89,7 +90,7 @@ const uid = () => Math.random().toString(36).slice(2, 8);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pad = n => String(n).padStart(2, '0');
 const snd = (id, o) => window.BearWallSound && BearWallSound.play(id, o);   // sound.js; silent on the control page
-const say = (ids, o) => window.BearWallSound && BearWallSound.say(ids, o);   // the robot's voice lines (sound.js)
+const say = (ids, o) => window.BearWallSound ? BearWallSound.say(ids, o) : Promise.resolve();   // the robot's voice lines (sound.js)
 
 // On the projector the page comes from the BearWall app: /wall is what the projector shows, /control is your laptop.
 // There the layout, settings and device switches live in the app (shared by both, live), not in this browser.
@@ -556,7 +557,7 @@ function buildStage() {
 }
 
 function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
-  const ctx = { mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather,
+  const ctx = { id: i.w.id, mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather,
     devices: devicesNow(), alerts, system: systemNow() };
   i.el.className = `wgt w-${i.w.type} ${i.w.mode} ${i.w.anchor}`;
   try {
@@ -1514,9 +1515,147 @@ function onUpdating(st) {
   BearWallIntro.updating(stage, UPD_TEXT[st] || st, S.motion, { corners: secCorners });
   if (st === 'failed') setTimeout(() => { BearWallIntro.cancel(); buildStage(); playIntro(); }, 3000);
 }
-/* ---------- what he says when the wall comes on ---------- */
-// startup: "BearWall online!" (or "Update done." after an update); wake: a wake line. Then the greeting, and once a day
-// the day's line (Friday, weekend, Christmas…).
+/* ---------- cards: what the Dynamic widgets show (docs/superpowers/specs/2026-11-22-dynamic-widget-design.md) ----------
+ * card = { id, source: 'weather'|'alerts'|'time'|'photos'|'lights', tier: 'urgent'|'heads'|'ambient'|'base', kind, icon, title,
+ *          detail, say: [voice line ids], key, until: ms, at: ms (when it last became new) }.
+ * urgent interrupts, heads pops once per key, ambient rotates, base = a never-blank default (Now & Next, All clear, the date…). */
+const feed = new Map();
+let slept = [], spot = null, debriefing = false;
+function card(c) {
+  const old = feed.get(c.id), key = c.key == null ? c.title + '|' + c.detail : c.key;
+  const n = Object.assign({ tier: 'ambient', source: 'time', kind: 'text', icon: '', title: '', detail: '' }, c, { key, at: old && old.key === key ? old.at : Date.now() });
+  feed.set(c.id, n);
+  if (sleeping && (n.tier === 'urgent' || n.tier === 'heads') && n.at !== (old && old.at)) slept = [n].concat(slept.filter(x => x.id !== n.id)).slice(0, 3);
+  return n;
+}
+const uncard = id => { feed.delete(id); };
+function cardsNow() {
+  const t = Date.now();
+  for (const [id, c] of feed) if (c.until && c.until < t) feed.delete(id);
+  return [...feed.values()];
+}
+const isMainDynamic = id => { const m = L.widgets.find(w => w.type === 'dynamic' && (w.opts.role || 'main') === 'main' && known(w)); return !!m && m.id === id; };
+// the debrief puts its cards on the Main Dynamic (null gives it back)
+function spotlight(c) {
+  spot = c;
+  const now = timeNow(), weather = weatherNow(now);
+  inst.filter(i => i.w.type === 'dynamic').forEach(i => updateInst(i, now, weather));
+}
+const isQuiet = d => { const q = window.BearWallSound && BearWallSound.settings.quiet; if (!q || !q.on) return false;
+  const m = d.getHours() * 60 + d.getMinutes(), a = toMin(q.from), b = toMin(q.to); return a <= b ? m >= a && m < b : m >= a || m < b; };
+const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const MOON_NAMES = ['New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous', 'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent'];
+const moonOf = d => MOON_NAMES[Math.round(((d / 864e5 - 10962.76) % 29.5306 + 29.5306) % 29.5306 / 29.5306 * 8) % 8];   // days since the 2000-01-06 new moon
+const dayPct = d => Math.round((d.getHours() * 60 + d.getMinutes()) / 14.4);
+const fmtDay = d => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+const hr = d => d.toLocaleTimeString('en-US', { hour: 'numeric' });
+const wet = c => c === 'rain' || c === 'thunder';
+// the next useful thing for Now & Next
+function nextOf(w, now) {
+  const t = now.getTime(), soon = (w.hourly || []).filter(h => h.time.getTime() > t && h.time.getTime() - t <= 3 * 3600e3);
+  const r = wet(w.cond) ? soon.find(h => !wet(h.cond) && h.pop < 40) : soon.find(h => wet(h.cond) || h.pop >= 60);
+  if (r) return wet(w.cond) ? `Rain stopping around ${hr(r.time)}` : `Rain around ${hr(r.time)}`;
+  for (const [d, name] of [[w.sunset, 'Sunset'], [w.sunrise, 'Sunrise']]) if (d && d - now > 0 && d - now <= 2 * 3600e3) return `${name} at ${util.fmtTime(d)}`;
+  if (now.getHours() >= 18) { const tm = tomorrowOf(w, now); if (tm) return `Tomorrow ${tm.hi}° / ${tm.lo}°${tm.rain ? ' · rain likely' : ''}`; }
+  return soon.slice(0, 3).map(h => `${hr(h.time)} ${h.temp}°`).join(' · ');
+}
+function tomorrowOf(w, now) {
+  const d = new Date(now); d.setDate(d.getDate() + 1);
+  const hs = (w.hourly || []).filter(h => h.time.toDateString() === d.toDateString());
+  if (hs.length < 6) return null;
+  return { hi: Math.max(...hs.map(h => h.temp)), lo: Math.min(...hs.map(h => h.temp)), rain: hs.some(h => h.pop >= 60), cond: hs[Math.floor(hs.length / 2)].cond };
+}
+// every second: alerts, weather heads-ups, the time-of-day set and the never-blank defaults
+function cardTick(now, w) {
+  const t = now.getTime(), h = now.getHours() + now.getMinutes() / 60, night = isQuiet(now), live = !!w.live;
+  // alerts (their voice comes from setAlert; cards only show)
+  const ids = new Set(alerts.map(a => 'alert-' + a.id));
+  for (const id of feed.keys()) if (id.indexOf('alert-') === 0 && !ids.has(id)) uncard(id);
+  alerts.forEach(a => card({ id: 'alert-' + a.id, source: 'alerts', tier: a.level === 'critical' ? 'urgent' : 'heads', icon: 'alert', title: a.title, detail: a.detail, key: a.level,
+    say: a.id === 'net' && a.level === 'critical' ? ['net-down'] : [] }));
+  // weather heads-ups (live weather only)
+  const soon = live ? (w.hourly || []).find(x => x.time.getTime() > t && x.time.getTime() - t <= 3600e3) : null;
+  const heads = {
+    'wx-rain-soon': soon && !wet(w.cond) && (wet(soon.cond) || soon.pop >= 60) && { icon: 'rain', title: 'Rain soon', detail: `around ${hr(soon.time)} · ${soon.pop}%`, key: hr(soon.time), say: ['wx-rain-soon'] },
+    'wx-rain-stop': soon && wet(w.cond) && !wet(soon.cond) && soon.pop < 40 && { icon: 'partly', title: 'Rain stopping', detail: `by ${hr(soon.time)}`, key: hr(soon.time), say: ['wx-rain-stopping'] },
+    'wx-hot': live && w.feels >= 38 && h >= 11 && h < 16 && { icon: 'clear', title: `Feels like ${w.feels}°`, detail: 'Drink water', key: now.toDateString(), say: ['wx-heat'] },
+    'sunset': live && w.sunset && w.sunset - now > 0 && w.sunset - now <= 15 * 60e3 && { icon: 'sunset', title: 'Sunset soon', detail: util.fmtTime(w.sunset), key: now.toDateString(), say: ['sunset'] }
+  };
+  for (const id in heads) heads[id] ? card(Object.assign({ id, source: 'weather', tier: 'heads', until: t + 3600e3 }, heads[id])) : uncard(id);
+  // the time-of-day set (night: nothing rotates)
+  const amb = {}, photos = [].concat(...L.widgets.filter(x => x.type === 'photos' && known(x)).map(x => x.opts.photos || []));
+  if (!night && live && h >= 5 && h < 11) {
+    const left = (w.hourly || []).filter(x => x.time.toDateString() === now.toDateString());
+    amb['amb-today'] = { source: 'weather', icon: w.cond, title: `Today ${w.hi}° / ${w.lo}°`, detail: `Rain chance ${Math.max(0, ...left.map(x => x.pop))}%` };
+  }
+  if (!night && h >= 5 && h < 11 && feed.has('classes')) amb['amb-classes'] = Object.assign({}, feed.get('classes'), { source: 'alerts' });
+  if (!night && live && h >= 11 && h < 18) {
+    amb['amb-next'] = { source: 'weather', kind: 'timeline', title: 'Next hours', hours: (w.hourly || []).filter(x => x.time.getTime() > t).slice(0, 3).map(x => ({ t: hr(x.time), c: x.cond, n: x.night, temp: x.temp })) };
+    amb['amb-feels'] = { source: 'weather', icon: w.cond, title: `Feels like ${w.feels}°`, detail: `Humidity ${w.hum}%` };
+    if (w.sunset) amb['amb-sun'] = { source: 'weather', icon: 'sunset', title: `Sunset ${util.fmtTime(w.sunset)}`, detail: `Sunrise was ${util.fmtTime(w.sunrise)}` };
+  }
+  if (!night && h >= 18) {
+    const tm = live && tomorrowOf(w, now);
+    if (tm) amb['amb-tomorrow'] = { source: 'weather', icon: tm.cond, title: `Tomorrow ${tm.hi}° / ${tm.lo}°`, detail: tm.rain ? 'Rain likely' : 'Looks dry' };
+    amb['amb-moon'] = { source: 'time', icon: 'moon', title: moonOf(now), detail: 'Tonight' };
+  }
+  if (!night && photos.length) amb['amb-photo'] = { source: 'photos', kind: 'photo', photo: photos[Math.floor(t / 600e3) % photos.length], title: '', detail: '' };
+  const lt = window.BearWallLights && BearWallLights.state, scene = lt && BearWallLights.scene && BearWallLights.scene();
+  if (!night && lt && lt.bulb.found && lt.light.on) amb['amb-light'] = { source: 'lights', icon: 'bulb', title: scene || 'Lights on', detail: Math.round(lt.light.bright / 10) + '%' };
+  if (!night) amb['amb-day'] = { source: 'time', icon: 'day', title: fmtDay(now), detail: `${dayPct(now)}% of the day done` };
+  for (const id of feed.keys()) if (id.indexOf('amb-') === 0 && !amb[id]) uncard(id);
+  for (const id in amb) card(Object.assign({ id, tier: 'ambient' }, amb[id]));
+  // the never-blank defaults
+  const clock = { kind: 'clock', title: util.fmtTime(now, false), detail: fmtDay(now), key: 'clock' };
+  card(Object.assign({ id: 'base-now', source: 'weather', tier: 'base' }, night ? clock
+    : live ? { kind: 'now', icon: w.cond, night: w.night, temp: w.temp, title: `${w.temp}°`, detail: `feels ${w.feels}°`, next: nextOf(w, now), key: 'now' }
+    : { icon: 'day', title: fmtDay(now), detail: `${dayPct(now)}% of the day · weather offline`, key: 'now' }));
+  card(Object.assign({ id: 'base-time', source: 'time', tier: 'base' }, night ? clock : { icon: 'day', title: fmtDay(now), detail: `${dayPct(now)}% of the day done`, key: 'day' }));
+  card(Object.assign({ id: 'base-alerts', source: 'alerts', tier: 'base' }, alerts.length   // never "All clear" while something's wrong
+    ? { icon: 'alert', title: alerts.length + (alerts.length > 1 ? ' alerts' : ' alert'), detail: alerts[alerts.length - 1].title, key: 'n' + alerts.length }
+    : { icon: 'ok', title: 'All clear', detail: 'Nothing needs you', key: 'ok' }));
+  if (photos.length) card({ id: 'base-photos', source: 'photos', tier: 'base', kind: 'photo', photo: photos[Math.floor(t / 600e3) % photos.length], key: 'photo' }); else uncard('base-photos');
+  card({ id: 'base-lights', source: 'lights', tier: 'base', icon: 'bulb', title: lt && lt.light.on ? (scene || 'Lights on') : 'Lights off', detail: lt && lt.bulb.found ? 'Bulb connected' : 'Bulb not found', key: 'lights' });
+}
+
+/* ---------- the debrief: he talks through the day while Main shows each card ---------- */
+// startup / wake / the remote's OK. Quiet hours: the cards still show, silently (say() skips).
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function debrief(reason) {
+  if (debriefing) return;
+  debriefing = true;
+  try {
+    const now = new Date(), h = now.getHours(), w = weatherNow(timeNow()), steps = [];
+    let updated = false;
+    try { updated = sessionStorage.getItem('bearwall.updated') === '1'; sessionStorage.removeItem('bearwall.updated'); } catch (e) {}
+    const greet = h >= 5 && h < 12 ? 'greet-morning' : h >= 12 && h < 18 ? 'greet-afternoon' : 'greet-evening';
+    const first = updated ? 'update-done' : reason === 'boot' ? 'boot' : reason === 'wake' ? (h >= 5 && h < 11 && Math.random() < .5 ? 'wake-morning' : 'wake') : null;
+    let today = now.toDateString(), last = null;
+    try { last = localStorage.getItem('bearwall.voiceDay'); localStorage.setItem('bearwall.voiceDay', today); } catch (e) {}
+    const dl = last !== today && dayLine(now);
+    steps.push({ c: { id: 'db-hello', icon: 'day', title: greet === 'greet-morning' ? 'Good morning' : greet === 'greet-afternoon' ? 'Good afternoon' : 'Good evening', detail: fmtDay(now) },
+      say: [first, greet, dl || null] });
+    steps.push({ c: { id: 'db-time', kind: 'clock', title: util.fmtTime(now, false), detail: fmtDay(now) }, say: ['hour-' + (h % 12 || 12)] });
+    if (w.live) {
+      steps.push({ c: { id: 'db-temp', kind: 'now', icon: w.cond, night: w.night, temp: w.temp, title: `${w.temp}°`, detail: `feels ${w.feels}°`, next: nextOf(w, now) },
+        say: w.temp >= 20 && w.temp <= 40 ? ['temp-' + w.temp] : [] });
+      const left = (w.hourly || []).filter(x => x.time.toDateString() === now.toDateString() && x.time > now), pop = Math.max(0, ...left.map(x => x.pop));
+      steps.push({ c: { id: 'db-rain', icon: pop >= 50 ? 'rain' : 'clear', title: pop >= 50 ? 'Rain likely today' : 'No rain today', detail: `Rain chance ${pop}%` },
+        say: [pop >= 50 ? 'brief-rain' : 'brief-no-rain'] });
+    }
+    if (feed.has('pasok')) steps.push({ c: feed.get('pasok'), say: ['pasok'] });
+    else if (feed.has('classes')) steps.push({ c: feed.get('classes'), say: ['brief-classes-on'] });
+    slept.forEach(c => steps.push({ c, say: c.say || [] }));
+    slept = [];
+    for (const s of steps) {
+      spotlight(Object.assign({ tier: 'urgent', source: 'time', kind: 'text', key: s.c.id }, s.c));
+      await Promise.all([say(s.say.filter(Boolean), { force: true, delay: 0 }), wait(1600)]);
+    }
+    await wait(800);
+  } finally { spotlight(null); debriefing = false; }
+}
+
+// the day's line, once a day in the debrief's greeting
 function dayLine(d) {
   const m = d.getMonth() + 1, day = d.getDate(), wd = d.getDay();
   if (m === 12 && day === 25) return 'christmas';
@@ -1524,18 +1663,6 @@ function dayLine(d) {
   if (m === 9 && day === 1) return 'christmas-season';
   if (day === 1) return 'new-month';
   return wd === 5 ? 'friday' : wd === 6 || wd === 0 ? 'weekend' : wd === 1 ? 'monday' : null;
-}
-function hello(boot) {
-  const now = new Date(), h = now.getHours(), lines = [];
-  let updated = false;
-  try { updated = sessionStorage.getItem('bearwall.updated') === '1'; sessionStorage.removeItem('bearwall.updated'); } catch (e) {}
-  lines.push(updated ? 'update-done' : boot ? 'boot' : h >= 5 && h < 11 && Math.random() < .5 ? 'wake-morning' : 'wake');
-  lines.push(h >= 5 && h < 12 ? 'greet-morning' : h < 18 && h >= 12 ? 'greet-afternoon' : 'greet-evening');
-  let today = now.toDateString(), last = null;
-  try { last = localStorage.getItem('bearwall.voiceDay'); localStorage.setItem('bearwall.voiceDay', today); } catch (e) {}
-  const dl = last !== today && dayLine(now);
-  if (dl) lines.push(dl);
-  say(lines, { force: true, delay: 0 });
 }
 
 /* ---------- public API ---------- */
@@ -1634,13 +1761,14 @@ window.BearWall = {
     normalize();
     bindStage(); bindControls();
     buildStage();
-    Promise.resolve(playIntro()).then(() => hello(true));   // sections light up, the widgets load in, then he says hi
+    Promise.resolve(playIntro()).then(() => debrief('boot'));   // sections light up, the widgets load in, then the debrief
     fetchWeather();
     setInterval(fetchWeather, 10 * 60 * 1000);
     checkNet(); setInterval(checkNet, 30 * 1000);
     checkUpdate(); setInterval(checkUpdate, 30 * 60 * 1000);
     setInterval(() => {   // widgets with `every` refresh on their own clock
       soundTick();
+      { const n = timeNow(); cardTick(n, weatherNow(n)); }
       const t = Date.now(), due = inst.filter(i => i.m.every && t - i.last >= i.m.every - 100);
       const bgDue = bgInst.filter(i => i.type && bgTypes[i.type].every && t - i.last >= bgTypes[i.type].every - 100);
       if (!due.length && !bgDue.length) return;
@@ -1659,10 +1787,13 @@ window.BearWall = {
   wake() {
     if (!stage) return;
     sleeping = false; ambKey = ''; window.BearWallSound && BearWallSound.wake(); snd('wake');
-    stage.style.visibility = ''; buildStage(); Promise.resolve(playIntro()).then(() => hello(false)); fetchWeather();
+    stage.style.visibility = ''; buildStage(); Promise.resolve(playIntro()).then(() => debrief('wake')); fetchWeather();
   },
   say,   // BearWall.say(ids, opts) for widgets and lights.js
   sound: snd,   // BearWall.sound(id, opts) for widgets and lights.js
+  // cards for the Dynamic widgets (see the cards section)
+  card, uncard, cards: cardsNow, isMainDynamic, get spot() { return spot; },
+  debrief: reason => debrief(reason || 'button'),
   _test: { homography, applyH, validQuad, inQuad, localToPanel, panelToLocal, get inside() { return inside; }, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };
 })();
