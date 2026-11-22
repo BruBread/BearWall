@@ -127,13 +127,14 @@ const PREVIEW = 8;   // an ambience played as a one-shot (sound board, Test) run
 function play(id, opts) {
   opts = opts || {};
   const e = reg()[id];
-  if (SILENT || !e || (asleep && !e.critical) || !S.on || !S.types[e.type] || !S.types[e.type].on) return;
+  // opts.full = a sound board / Test press: plays even with its type switched off, at full level (only Volume applies)
+  if (SILENT || !e || !S.types[e.type] || (asleep && !e.critical) || (!opts.full && (!S.on || !S.types[e.type].on))) return;
   if (id === 'hour-bell' && !S.bell) return;
   const src = sourceOf(id, e, opts.variant);
   if (!src) return;
   const c = audio(), out = c.createGain(), loop = e.type === 'ambience';
   out.gain.value = opts.gain == null ? 1 : opts.gain;
-  out.connect(buses[e.type]);
+  out.connect(opts.full ? master : buses[e.type]);
   const len = loop ? PREVIEW : (e.len || 2);
   if (src.file) {
     hold(len + 0.5);   // stays awake while the file loads
@@ -226,7 +227,7 @@ function event(d) {
   if (d.indexOf('sound:play:') === 0) {
     if (!WALL) return;   // only the wall page plays
     const p = d.split(':');
-    play(p[2], { variant: p[3] || undefined });
+    play(p[2], { variant: p[3] || undefined, full: true });
   } else if (d === 'sound:files') loadFiles();
   else if (d.indexOf('kv:sound:') === 0 && d.slice(9) !== CLIENT) loadSettings().then(() => { applyLevels(); renderCard(); });
 }
@@ -235,7 +236,7 @@ function event(d) {
 const api = (method, path, body) => fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
   .then(r => r.json().catch(() => ({})).then(j => { if (!r.ok && !j.error) j.error = 'HTTP ' + r.status; return j; }));
 // plays on the projector speaker; in the plain prototype, here
-const playThere = (id, variant) => ON ? api('POST', '/api/sound/play', { id, variant }) : play(id, { variant });
+const playThere = (id, variant) => ON ? api('POST', '/api/sound/play', { id, variant }) : play(id, { variant, full: true });
 const getP = p => p.split('.').reduce((o, k) => o[k], S);
 const setP = (p, v) => { const ks = p.split('.'), last = ks.pop(); ks.reduce((o, k) => o[k], S)[last] = v; };
 const range = (k, label) => `<div class="lbl"><span>${label}</span><span data-v="${k}"></span></div><input type="range" min="0" max="13" step="1" data-k="${k}" aria-label="${label}">`;

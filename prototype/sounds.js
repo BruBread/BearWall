@@ -107,9 +107,15 @@ const blinds = (open, kind) => (ctx, out, t) => {
 
 // ---------- registry ----------
 const R = {};
+// Loudness: each candidate's measured peak brought to -3 dBFS (ticks -9, they repeat; ambience -8), so they compare fairly
+// and level 13 really is as loud as the projector goes. Re-measure (scratchpad measure.js) after changing a design.
+const BOOST = {'intro-hum.a':2.56, 'intro-hum.b':5.28, 'intro-hum.c':6.27, 'intro-zip.a':7.03, 'intro-zip.b':5.11, 'intro-zip.c':7.82, 'intro-clunk.a':2.74, 'intro-clunk.b':3, 'intro-clunk.c':7.67, 'intro-tick.a':4.64, 'intro-tick.b':7.14, 'intro-tick.c':6.42, 'intro-chord.a':3.44, 'intro-chord.b':5.04, 'intro-chord.c':5.83, 'power-down.a':4.28, 'power-down.b':5.15, 'power-down.c':9.15, 'sleep.a':7.1, 'sleep.b':5.9, 'sleep.c':7.06, 'wake.a':7.01, 'wake.b':5.92, 'wake.c':7.09, 'flip.a':7.01, 'flip.b':3.75, 'flip.c':7.58, 'light-on.a':7.6, 'light-on.b':8.77, 'light-on.c':8.92, 'light-off.a':7.73, 'light-off.b':10.12, 'light-off.c':8.93, 'light-tick.a':6.03, 'light-tick.b':3.03, 'light-tick.c':5.63, 'light-scene.a':6.86, 'light-scene.b':5.02, 'light-scene.c':10.54, 'volume-tick.a':3.64, 'volume-tick.b':3.86, 'volume-tick.c':3.95, 'blinds-close.a':4.44, 'blinds-close.b':9.2, 'blinds-close.c':11.88, 'blinds-open.a':9.52, 'blinds-open.b':8.61, 'blinds-open.c':12, 'hour-bell.a':5.06, 'hour-bell.b':7.02, 'hour-bell.c':7.45, 'alert-info.a':6.85, 'alert-info.b':7.8, 'alert-info.c':6.14, 'alert-warn.a':5.34, 'alert-warn.b':5.93, 'alert-warn.c':7.31, 'alert-critical.a':5.77, 'alert-critical.b':4.86, 'alert-critical.c':7.06, 'net-down.a':5.92, 'net-down.b':5.29, 'net-down.c':7.15, 'net-up.a':5.87, 'net-up.b':5.1, 'net-up.c':7.03, 'update.a':7.36, 'update.b':7.22, 'update.c':4.99, 'pasok.a':4.67, 'pasok.b':4.13, 'pasok.c':9.79, 'storm.a':4.11, 'storm.b':9.17, 'storm.c':6.98, 'amb-rain.a':3.14, 'amb-rain.b':3.28, 'amb-rain.c':4.05, 'amb-thunder.a':11.02, 'amb-thunder.b':9.23, 'amb-thunder.c':6.94, 'amb-birds.a':11.1, 'amb-birds.b':10.58, 'amb-birds.c':8, 'amb-crickets.a':11.54, 'amb-crickets.b':7.5, 'amb-crickets.c':12, 'amb-waves.a':6.83, 'amb-waves.b':0.79, 'amb-waves.c':4.25, 'amb-city.a':12, 'amb-city.b':10.8, 'amb-city.c':12};
 const def = (id, type, label, len, v, extra) => {
   R[id] = Object.assign({ type, label, len, variants: {} }, extra);
-  Object.keys(v).forEach(k => { const fn = v[k][1]; R[id].variants[k] = { name: v[k][0], fn: (c, o, t, p) => fn(c, o, t, p || {}) }; });
+  Object.keys(v).forEach(k => {
+    const fn = v[k][1], boost = BOOST[id + '.' + k] || 1;
+    R[id].variants[k] = { name: v[k][0], fn: (c, o, t, p) => { const g = c.createGain(); g.gain.value = boost; g.connect(o); return fn(c, g, t, p || {}); } };
+  });
 };
 const PENT = [0, 2, 4, 7, 9, 12, 14, 16];   // light-scene pitch steps (major pentatonic)
 const CHORD = [523.3, 659.3, 784, 987.8];   // Cmaj7: calm, a bit sci-fi
