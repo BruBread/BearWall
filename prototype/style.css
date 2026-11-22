@@ -105,7 +105,24 @@ h2 { margin: 0; font-size: 17px; font-weight: 800; }
 /* View = nothing selected: a clean wall. Arrange = one widget selected: its outline, name tag and resize handles. */
 .stage.sel-on .wall { background-image: linear-gradient(#ffffff10 1px, transparent 1px), linear-gradient(90deg, #ffffff10 1px, transparent 1px); background-size: 2.5% 4.444%; }
 .stage.sel-on .widget { outline: 1px dashed #ffffff40; outline-offset: -1px; cursor: pointer; }
-.stage.sel-on .widget.sel { z-index: 2; cursor: move; outline: 2px solid var(--c); outline-offset: -2px; border-radius: 4px; }
+.stage.sel-on .widget.sel { cursor: move; }   /* keeps its layer (Layers card); the outline below floats above the others */
+.stage.sel-on .widget.sel::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; outline: 2px solid var(--c); outline-offset: -2px; border-radius: 4px; }
+.widget.wdraw { pointer-events: none; }   /* a section's drawing: picked in the Layers card or drawn on in Draw mode */
+.widget.wdraw > .handle { display: none !important; }
+.layers { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.lyr { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 12px; background: #ffffff0d; cursor: pointer; font-weight: 700; font-size: 13px; }
+.lyr:hover { background: #ffffff1a; } .lyr.on { border-color: var(--c); color: var(--c); }
+.lyr .lgrip { opacity: .45; cursor: grab; letter-spacing: -2px; }
+.kbd { opacity: .6; font-size: 11px; }
+/* Draw mode toolbar (draw.js) */
+.drawbar { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 18px; background: #ffffff0d; }
+.drawbar[hidden] { display: none; }
+.drawbar .drow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.drawbar .drow label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.drawbar .sw { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; background: var(--s); cursor: pointer; }
+.drawbar .sw.on { border-color: #fff; box-shadow: 0 0 0 2px var(--c); }
+.drawbar #dText { flex: 1 1 220px; }
+body.drawing .stage-box { cursor: crosshair; }
 /* Show when: a widget whose device isn't connected is hidden in View and faint while arranging */
 .widget.off { visibility: hidden; }
 .stage.sel-on .widget.off { visibility: visible; opacity: .25; }

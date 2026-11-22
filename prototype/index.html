@@ -118,12 +118,21 @@
             <select class="field" id="wSection" aria-label="Section this widget lives in"></select>
           </div>
           <div class="tabs" id="wWhen"><button data-v="always">Always</button><button data-v="laptop">Laptop connected</button><button data-v="phone">Phone connected</button></div>
+          <div id="wLayerRow" hidden>
+            <div class="lbl"><span>Layer</span><span class="kbd">Ctrl+] / Ctrl+[</span></div>
+            <div class="tabs wrap" id="wLayer"><button data-v="back">To back</button><button data-v="backward">Backward</button><button data-v="forward">Forward</button><button data-v="front">To front</button></div>
+          </div>
           <div id="widgetOpts"></div>
 
           <div class="actions"><button class="btn danger" id="del">Delete widget</button></div>
         </div>
 
         <div class="note">Arrows move the selected widget 8 px. Delete removes it, Esc deselects. Its colors are in the Look card, warping in the Warp card.</div>
+        <div id="layerCard" hidden>
+          <div class="lbl"><span>Layers · <span id="layerFor"></span></span><span>top first</span></div>
+          <div class="layers" id="layerList"></div>
+          <div class="note">Drag a layer to reorder it. Higher covers lower, like Canva.</div>
+        </div>
       </section>
 
       <section class="glass" aria-label="Sections" id="secCard">
@@ -139,6 +148,8 @@
           <div class="tabs" id="secBg"></div>
           <div id="secBgOpts"></div>
           <div class="note" id="secNote"></div>
+          <div class="lbl"><span>Layer</span><span class="kbd">Ctrl+] / Ctrl+[</span></div>
+          <div class="tabs wrap" id="sLayer"><button data-v="back">To back</button><button data-v="backward">Backward</button><button data-v="forward">Forward</button><button data-v="front">To front</button></div>
           <div class="actions">
             <button class="btn quiet" id="secInside">Go inside</button>
             <button class="btn danger" id="secDel">Delete section</button>
@@ -218,6 +229,7 @@
 <script src="lights.js"></script>
 <script src="widgets/lights.js"></script>
 <script src="widgets/dynamic.js"></script>
+<script src="draw.js"></script>
 <script src="sounds.js"></script>
 <script src="sound.js"></script>
 <script>BearWall.boot();</script>

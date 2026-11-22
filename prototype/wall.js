@@ -345,6 +345,7 @@ function normalize() {
       if (xs.concat(ys).every(Number.isFinite)) { w.x = Math.min(...xs); w.y = Math.min(...ys); }
       delete w.quad; fitInside(w, sp.w, sp.h);
     }
+    if (w.type === 'drawing') Object.assign(w, { x: 0, y: 0, w: sp.w, h: sp.h });   // a section's drawing covers the whole section
     w.mode = autoMode(w);
     w.anchor = w.anchor === 'left' ? 'left' : 'right';
     w.when = ['laptop', 'phone'].includes(w.when) ? w.when : 'always';
@@ -494,6 +495,7 @@ function positionSection(s) {
 function positionWidget(w) {
   const el = widEl(w), s = sectionOf(w.section);
   if (!el || !s) return;
+  if (w.type === 'drawing') Object.assign(w, { x: 0, y: 0, w: s.w, h: s.h });   // follows its section when that's resized
   place(el, w, s.w, s.h);
   el.dataset.label = types[w.type].name;
   applyLook(w, el);
@@ -529,7 +531,7 @@ function buildStage() {
   inst.forEach(i => i.ro.disconnect()); bgInst.forEach(b => b.ro.disconnect());
   if (inside && !sectionOf(inside)) inside = null;
   wallEl.innerHTML = L.sections.map(s => `<div class="section" data-sid="${esc(s.id)}"><div class="sbg"></div>`
-    + L.widgets.filter(w => w.section === s.id && known(w)).map(w => `<div class="widget frame" data-wid="${esc(w.id)}"><div class="wgt"></div>${HANDLES}</div>`).join('')
+    + L.widgets.filter(w => w.section === s.id && known(w)).map(w => `<div class="widget frame${w.type === 'drawing' ? ' wdraw' : ''}" data-wid="${esc(w.id)}"><div class="wgt"></div>${HANDLES}</div>`).join('')
     + HANDLES + '</div>').join('');
   const observe = (el, i) => {
     i.ro = new ResizeObserver(() => {   // layout size, not the warped on-screen size
@@ -557,7 +559,7 @@ function buildStage() {
 }
 
 function updateInst(i, now = timeNow(), weather = weatherNow(now)) {
-  const ctx = { id: i.w.id, mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather,
+  const ctx = { id: i.w.id, w: i.w.w, h: i.w.h, mode: i.w.mode, anchor: i.w.anchor, opts: i.w.opts, look: i.w.look, now, motion: S.motion, settings: S, city: S.city, weather,
     devices: devicesNow(), alerts, system: systemNow() };
   i.el.className = `wgt w-${i.w.type} ${i.w.mode} ${i.w.anchor}`;
   try {
@@ -692,6 +694,7 @@ function renderSel() {
   $('#selName').textContent = sel ? styleTitle(w) + (w.quad ? ' · warped' : '') : 'Nothing selected · click a widget on the wall';
   $('#widgetTools').hidden = !sel;
   renderLook(sel ? w : null);
+  renderLayers();
   if (sel) {
     onTabs('wAnchor', w.anchor); onTabs('wWhen', w.when);
     $('#anchorRow').hidden = w.mode !== 'rect';
@@ -699,6 +702,7 @@ function renderSel() {
     renderOpts(w);
     $('#wSectionRow').hidden = L.sections.length < 2;
     $('#wSection').innerHTML = L.sections.map(x => `<option value="${esc(x.id)}"${x.id === w.section ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+    $('#wLayerRow').hidden = false;
 
   }
 }
@@ -734,7 +738,7 @@ function setLook(k, v) {
 
 // the Add gallery: a live, still preview of every widget (styles of a widget are picked after adding it)
 function buildGallery() {
-  $('#gallery').innerHTML = Object.values(types).filter(m => !m.family).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="gbox" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"><div class="wgt"></div></div></div>${esc(m.name)}</button>`).join('');
+  $('#gallery').innerHTML = Object.values(types).filter(m => !m.family && !m.hidden).map(m => `<button class="gitem" data-type="${esc(m.type)}" title="Add ${esc(m.name)}"><div class="gprev" data-icons="${DEFAULT_LOOK.icons}"><div class="gbox" style="--ar:${m.size.square[0]} / ${m.size.square[1]}"><div class="wgt"></div></div></div>${esc(m.name)}</button>`).join('');
   $('#gallery').querySelectorAll('.gitem').forEach(b => {
     const el = b.querySelector('.wgt'), box = el.parentNode;
     new ResizeObserver(() => { if (scaleWgt(el, box.offsetWidth, box.offsetHeight)) renderGallery(); }).observe(box);
@@ -840,6 +844,48 @@ function moveThing(t, start, dx, dy) {
   if (start.quad) return moveAll(t, start.quad, snap(dx), snap(dy));
   const sp = spaceOf(t);
   moveResize(t, start, dx, dy, '', sp.w, sp.h); reposition(t);
+}
+
+/* ---------- layers: the order in the saved lists is the stacking order (later = on top), like Canva ---------- */
+// t = a widget (among its section's widgets, the drawing layer included) or a section (among the sections)
+function relayer(t, how) {
+  const secs = isSec(t), peers = secs ? L.sections.slice() : L.widgets.filter(w => w.section === t.section);
+  const i = peers.indexOf(t), n = peers.length - 1;
+  const j = how === 'front' ? n : how === 'back' ? 0 : clamp(i + (how === 'forward' ? 1 : -1), 0, n);
+  if (i < 0 || i === j) return;
+  peers.splice(i, 1); peers.splice(j, 0, t);
+  if (secs) L.sections = peers;
+  else { const at = L.widgets.findIndex(w => w.section === t.section); L.widgets = L.widgets.filter(w => w.section !== t.section); L.widgets.splice(Math.min(at, L.widgets.length), 0, ...peers); }
+  saveLayout(); buildStage(); renderChrome();
+}
+// the section whose layers the list shows: the one you're inside, the selected one, or the selected widget's
+const layerSection = () => sectionOf(inside) || selS() || (selW() && sectionOf(selW().section)) || null;
+const layerName = w => w.type === 'drawing' ? 'Drawing' : known(w) ? styleTitle(w) : w.type;
+function renderLayers() {
+  const s = layerSection(), box = $('#layerList');
+  $('#layerCard').hidden = !s;
+  if (!s) return;
+  $('#layerFor').textContent = s.name;
+  const ws = L.widgets.filter(w => w.section === s.id && known(w)).reverse();   // top layer first
+  box.innerHTML = ws.map(w => `<div class="lyr${w.id === sel ? ' on' : ''}" draggable="true" data-wid="${esc(w.id)}"><span class="lgrip">⋮⋮</span>${esc(layerName(w))}</div>`).join('')
+    || '<div class="note">No widgets in this section yet.</div>';
+}
+function bindLayerList() {
+  const box = $('#layerList');
+  let dragId = null;
+  box.addEventListener('click', e => { const r = e.target.closest('.lyr'); if (r) select(r.dataset.wid); });
+  box.addEventListener('dragstart', e => { const r = e.target.closest('.lyr'); dragId = r && r.dataset.wid; if (dragId) e.dataTransfer.effectAllowed = 'move'; });
+  box.addEventListener('dragover', e => { if (dragId) e.preventDefault(); });
+  box.addEventListener('drop', e => {   // dropped on a row: take that row's place in the stack
+    e.preventDefault();
+    const r = e.target.closest('.lyr'), w = dragId && widgetOf(dragId), to = r && widgetOf(r.dataset.wid);
+    dragId = null;
+    if (!w || !to || w === to || w.section !== to.section) return;
+    const peers = L.widgets.filter(x => x.section === w.section && x !== w), at = L.widgets.findIndex(x => x.section === w.section);
+    peers.splice(peers.indexOf(to) + (L.widgets.indexOf(w) < L.widgets.indexOf(to) ? 1 : 0), 0, w);
+    L.widgets = L.widgets.filter(x => x.section !== w.section); L.widgets.splice(Math.min(at, L.widgets.length), 0, ...peers);
+    sel = w.id; saveLayout(); buildStage(); renderChrome();
+  });
 }
 
 /* ---------- sections ---------- */
@@ -1142,6 +1188,9 @@ function bindControls() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); flatten(selS()); return; }   // with nothing selected, Ctrl+R reloads as usual
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.code === 'BracketRight' || e.code === 'BracketLeft')) {
+      e.preventDefault(); relayer(w, e.code === 'BracketRight' ? (e.shiftKey ? 'front' : 'forward') : (e.shiftKey ? 'back' : 'backward')); return;
+    }
     if (warpOn() && /^Digit[1-4]$/.test(e.code)) { corner = +e.code.slice(5) - 1; drawWarpUI(); return; }
     const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
     if (!D) return;
@@ -1156,6 +1205,8 @@ function bindControls() {
   $('#flatten').onclick = () => flatten(selS());
   // widget tools
   $('#del').onclick = deleteSelected;
+  for (const id of ['#wLayer', '#sLayer']) $(id).onclick = e => { const b = e.target.closest('button'), t = target(); if (b && t) relayer(t, b.dataset.v); };
+  bindLayerList();
   buildGallery();
   $('#gallery').onclick = e => { const b = e.target.closest('.gitem'); if (b && types[b.dataset.type]) addWidget(b.dataset.type); };
   document.querySelectorAll('.colorrow').forEach(row => {   // full color picker + quick presets
@@ -1604,7 +1655,7 @@ function cardTick(now, w) {
   };
   for (const id in heads) heads[id] ? card(Object.assign({ id, source: 'weather', tier: 'heads', until: t + 3600e3 }, heads[id])) : uncard(id);
   // the time-of-day set (night: nothing rotates)
-  const amb = {}, photos = [].concat(...L.widgets.filter(x => x.type === 'photos' && known(x)).map(x => x.opts.photos || []));
+  const amb = {};
   if (!night && live && h >= 5 && h < 11) {
     const left = (w.hourly || []).filter(x => x.time.toDateString() === now.toDateString());
     amb['amb-today'] = { source: 'weather', icon: w.cond, title: `Today ${w.hi}° / ${w.lo}°`, detail: `Rain chance ${Math.max(0, ...left.map(x => x.pop))}%` };
@@ -1620,7 +1671,6 @@ function cardTick(now, w) {
     if (tm) amb['amb-tomorrow'] = { source: 'weather', icon: tm.cond, title: `Tomorrow ${tm.hi}° / ${tm.lo}°`, detail: tm.rain ? 'Rain likely' : 'Looks dry' };
     amb['amb-moon'] = { source: 'time', icon: 'moon', title: moonOf(now), detail: 'Tonight' };
   }
-  if (!night && photos.length) amb['amb-photo'] = { source: 'photos', kind: 'photo', photo: photos[Math.floor(t / 600e3) % photos.length], title: '', detail: '' };
   const lt = window.BearWallLights && BearWallLights.state, scene = lt && BearWallLights.scene && BearWallLights.scene();
   if (!night && lt && lt.bulb.found && lt.light.on) amb['amb-light'] = { source: 'lights', icon: 'bulb', title: scene || 'Lights on', detail: Math.round(lt.light.bright / 10) + '%' };
   if (!night) amb['amb-day'] = { source: 'time', icon: 'day', title: fmtDay(now), detail: `${dayPct(now)}% of the day done` };
@@ -1635,7 +1685,6 @@ function cardTick(now, w) {
   card(Object.assign({ id: 'base-alerts', source: 'alerts', tier: 'base' }, alerts.length   // never "All clear" while something's wrong
     ? { icon: 'alert', title: alerts.length + (alerts.length > 1 ? ' alerts' : ' alert'), detail: alerts[alerts.length - 1].title, key: 'n' + alerts.length }
     : { icon: 'ok', title: 'All clear', detail: 'Nothing needs you', key: 'ok' }));
-  if (photos.length) card({ id: 'base-photos', source: 'photos', tier: 'base', kind: 'photo', photo: photos[Math.floor(t / 600e3) % photos.length], key: 'photo' }); else uncard('base-photos');
   card({ id: 'base-lights', source: 'lights', tier: 'base', icon: 'bulb', title: lt && lt.light.on ? (scene || 'Lights on') : 'Lights off', detail: lt && lt.bulb.found ? 'Bulb connected' : 'Bulb not found', key: 'lights' });
 }
 
@@ -1727,13 +1776,14 @@ function applyLayout(next) {
   applyNow(next);
 }
 function applyNow(next) {
-  const shape = l => JSON.stringify([l.windowOn, l.sections.map(s => [s.id, s.bg, s.bgOpts]), l.widgets.map(w => [w.id, w.type, w.section, w.mode, w.anchor, w.when, w.opts])]);
+  const shape = l => JSON.stringify([l.windowOn, l.sections.map(s => [s.id, s.bg, s.bgOpts]), l.widgets.map(w => [w.id, w.type, w.section, w.mode, w.anchor, w.when, w.type === 'drawing' ? 0 : w.opts])]);
   const before = shape(L);
   L = next; normalize();
   if (shape(L) !== before) { buildStage(); showRemote(); return; }
   inst.forEach(i => { i.w = widgetOf(i.w.id) || i.w; });
   bgInst.forEach(b => { b.s = sectionOf(b.s.id) || b.s; });
   positionAll();
+  inst.filter(i => i.w.type === 'drawing').forEach(i => updateInst(i));   // drawings change in place while you draw
 }
 async function loadShared() {
   await Promise.all(SHARED.map(k => fetch('/api/kv/' + k, { cache: 'no-store' }).then(r => r.json()).then(v => { shared[k] = v; }).catch(() => {})));
@@ -1815,6 +1865,27 @@ window.BearWall = {
   // cards for the Dynamic widgets (see the cards section)
   card, uncard, cards: cardsNow, isMainDynamic, get spot() { return spot; },
   get simulating() { return !!DEV.simulate; },
+  // Draw mode (draw.js): the section under the pointer, its drawing layer, save + redraw
+  drawHost: {
+    get layout() { return L; }, get inside() { return inside; },
+    at(e) {   // -> { s, p: [x, y] in that section's own space } for the topmost section under the pointer
+      const P = panelPt(e), list = inside ? [sectionOf(inside)] : L.sections.slice().reverse();
+      for (const s of list) {
+        const p = inside ? panelToLocal(s, P) : s.quad ? panelToLocal(s, P) : [P[0] - s.x, P[1] - s.y];
+        if (p[0] >= 0 && p[1] >= 0 && p[0] <= s.w && p[1] <= s.h) return { s, p };
+      }
+      return null;
+    },
+    local(s, e) { const P = panelPt(e); return inside || s.quad ? panelToLocal(s, P) : [P[0] - s.x, P[1] - s.y]; },
+    layer(s, create) {   // the section's Drawing layer (a hidden widget type, so it stacks like any other layer)
+      let w = L.widgets.find(x => x.section === s.id && x.type === 'drawing');
+      if (!w && create) { w = { id: uid(), type: 'drawing', section: s.id, x: 0, y: 0, w: s.w, h: s.h, mode: 'square', anchor: 'right', when: 'always', opts: { items: [] }, look: copy(DEFAULT_LOOK) }; L.widgets.push(w); saveLayout(); buildStage(); }
+      return w;
+    },
+    save() { saveLayout(); },
+    redraw(w) { const i = inst.find(x => x.w === w || x.w.id === w.id); if (i) updateInst(i); },
+    deselect() { sel = null; selSec = null; renderChrome(); }
+  },
   debrief: reason => debrief(reason || 'button'),
   _test: { homography, applyH, validQuad, inQuad, localToPanel, panelToLocal, get inside() { return inside; }, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };

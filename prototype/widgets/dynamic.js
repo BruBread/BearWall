@@ -5,8 +5,8 @@
 (function () {
 const U = BearWall.util;
 const RANK = { urgent: 3, heads: 2, ambient: 1, base: 0 };
-const SRC = ['weather', 'alerts', 'time', 'photos', 'lights'];
-const BASE_ORDER = ['weather', 'time', 'alerts', 'photos', 'lights'];   // a Secondary's default: its first ticked source
+const SRC = ['weather', 'alerts', 'time', 'lights'];
+const BASE_ORDER = ['weather', 'time', 'alerts', 'lights'];   // a Secondary's default: its first ticked source
 const showing = {};   // widget id -> card id, so a Secondary skips what Main shows
 const ICONS = {
   alert: '<circle cx="32" cy="32" r="22"/><path d="M32 20v16M32 44v1"/>',
@@ -22,7 +22,6 @@ const iconOf = c => WX.indexOf(c.icon) >= 0 ? U.iconSVG(c.icon, !!c.night)
   : ICONS[c.icon] ? `<svg viewBox="0 0 64 64" aria-hidden="true">${ICONS[c.icon]}</svg>` : '';
 
 function body(c) {
-  if (c.kind === 'photo') return `<div class="dy-ph"><img alt=""></div>`;
   if (c.kind === 'clock') return `<div class="dy-clk"><div class="dy-big fit">${U.esc(c.title)}</div><div class="dy-d fit">${U.esc(c.detail || '')}</div></div>`;
   if (c.kind === 'now') return `<div class="dy-now"><div class="dy-i">${iconOf(c)}</div><div class="dy-tx"><div class="dy-big fit">${U.esc(c.title)}</div>`
     + `<div class="dy-d fit">${U.esc(c.detail || '')}</div></div></div><div class="dy-nx fit">${c.next ? 'Next · ' + U.esc(c.next) : ''}</div>`;
@@ -30,7 +29,7 @@ function body(c) {
     + (c.hours || []).map(h => `<div><div class="dy-d">${U.esc(h.t)}</div><div class="dy-si">${U.iconSVG(h.c, h.n)}</div><div class="dy-tt">${h.temp}°</div></div>`).join('') + '</div>';
   return `<div class="dy-row"><div class="dy-i">${iconOf(c)}</div><div class="dy-tx"><div class="dy-t fit">${U.esc(c.title)}</div><div class="dy-d fit">${U.esc(c.detail || '')}</div></div></div>`;
 }
-const sig = c => c.id + '|' + c.key + '|' + c.title + '|' + c.detail + '|' + (c.next || '') + '|' + (c.photo || '');
+const sig = c => c.id + '|' + c.key + '|' + c.title + '|' + c.detail + '|' + (c.next || '');
 
 BearWall.register({
   type: 'dynamic', name: 'Dynamic', styleName: 'Dynamic',
@@ -42,7 +41,6 @@ BearWall.register({
     { key: 'src_weather', label: 'Weather', type: 'switch', value: true },
     { key: 'src_alerts', label: 'Alerts', type: 'switch', value: true },
     { key: 'src_time', label: 'Day & time', type: 'switch', value: true },
-    { key: 'src_photos', label: 'Photos', type: 'switch', value: true },
     { key: 'src_lights', label: 'Lights', type: 'switch', value: true },
     { key: 'sec_heads', label: 'Heads-up cards (Secondary)', type: 'switch', value: true },
     { key: 'sec_ambient', label: 'Rotating cards (Secondary)', type: 'switch', value: true },
@@ -78,8 +76,6 @@ BearWall.register({
     .w-dynamic .dy-si { width: calc(var(--u) * 20); height: calc(var(--u) * 20); margin: calc(var(--u) * 2) auto; }
     .w-dynamic .dy-si svg { width: 100%; height: 100%; }
     .w-dynamic .dy-tt { font-weight: 800; color: var(--w-text); font-size: calc(var(--u) * 12); }
-    .w-dynamic .dy-ph { position: absolute; inset: 0; border-radius: calc(var(--u) * 4); overflow: hidden; }
-    .w-dynamic .dy-ph img { width: 100%; height: 100%; object-fit: cover; }
     .w-dynamic .dy-strip { flex: none; display: flex; gap: calc(var(--u) * 3); margin-top: calc(var(--u) * 3); min-width: 0; }
     .w-dynamic .dy-strip:empty { display: none; }
     .w-dynamic .dy-chip { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: calc(var(--u) * 2); padding: calc(var(--u) * 1.5) calc(var(--u) * 3);
@@ -136,7 +132,6 @@ BearWall.register({
     }
     if (s !== d.sig) {
       cardEl.innerHTML = body(next);
-      if (next.kind === 'photo' && next.photo) U.photoURL(next.photo).then(u => { const img = cardEl.querySelector('img'); if (img && u) img.src = u; });
       d.sig = s;
     }
     d.cur = next;
