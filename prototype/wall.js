@@ -288,7 +288,7 @@ let sel = null;                           // selected widget id; none = View
 let selSec = null;                        // selected section id (a widget and a section are never both selected)
 let corner = 0, shiftHeld = false;   // warp editing
 // Phase 2 preview: devices on the network (simulated switches for now) and active alerts
-const DEV = Object.assign({ laptop: false, phone: false, phoneSince: null, mic: false, cam: false }, store.get('devices', {}));
+const DEV = Object.assign({ laptop: false, phone: false, phoneSince: null, mic: false, cam: false, simulate: false, tests: {} }, store.get('devices', {}));
 const saveDevices = () => store.set('devices', DEV);
 const devicesNow = () => ({ laptop: !!DEV.laptop, phone: !!DEV.phone, phoneSince: DEV.phoneSince ? new Date(DEV.phoneSince) : null, mic: !!DEV.mic, cam: !!DEV.cam });
 const shownNow = w => !w.when || w.when === 'always' || !!DEV[w.when];
@@ -1235,9 +1235,23 @@ function bindControls() {
 /* ---------- alerts: things the system notices (real internet check + sample triggers for the rest) ---------- */
 const SAMPLE_ALERTS = { 'net-down': { kind: 'network', level: 'critical', title: 'Offline 3 min', detail: 'No internet (sample)' } };
 
+// Simulate on/off or a test changed: refresh the alerts, the buttons and the wall
+function applySim() {
+  if (forced()['net-down']) setAlert('net', SAMPLE_ALERTS['net-down']);
+  else if (alerts.some(a => a.id === 'net' && a.detail === SAMPLE_ALERTS['net-down'].detail)) { clearAlert('net'); checkNet(); }
+  simButtons();
+  render();
+}
+function simButtons() {
+  const f = forced();
+  if (!$('#devSim')) return;
+  $('#devSim').checked = !!DEV.simulate;
+  document.querySelectorAll('#alertTest button').forEach(x => { x.disabled = !DEV.simulate; x.classList.toggle('on', !!f[x.dataset.id]); });
+}
+
 /* ---------- the projector's own stats (simulated until the Phase 1 projector app reads the real ones) ---------- */
 // The Test buttons on the Devices card force a state on, so every alert can be seen without breaking anything.
-const FORCE = {};
+const forced = () => DEV.simulate ? DEV.tests || {} : {};   // the Test buttons apply only while Simulate is on (shared with the wall)
 const TESTS = [['net-down', 'Offline'], ['device', 'New device'], ['hot', 'Hot'], ['storage', 'Storage'], ['memory', 'Memory'],
   ['uptime', 'Uptime'], ['power', 'Power cut'], ['malware', 'Malware'], ['adb', 'ADB']];
 const BOOT_AT = Date.now() - (3 * 864e5 + 4 * 3600e3), WATCH_AT = Date.now();
@@ -1246,14 +1260,18 @@ let realSys = null;   // the app's /api/system, on the projector
 async function pollSystem() { try { const r = await fetch('/api/system', { cache: 'no-store' }); if (r.ok) realSys = await r.json(); } catch (e) {} }
 function systemNow(now = Date.now()) {
   if (realSys) {   // real stats; the root-only ones stay null until the projector's watchdog script writes them
-    const sim = simSystem(now);
-    return Object.assign(sim, realSys, { sample: false, temp: realSys.temp == null ? null : realSys.temp, powerCuts: realSys.powerCuts || [],
+    const sim = simSystem(now), f = forced();
+    const real = Object.assign({}, sim, realSys, { sample: false, temp: realSys.temp == null ? null : realSys.temp, powerCuts: realSys.powerCuts || [],
       wifi: realSys.wifi || null, malware: realSys.malware || null, adb: realSys.adb || null, update: upd });
+    // a Simulate test goes on top of the real stats while it's on
+    const over = { hot: 'temp', storage: 'storage', memory: 'memory', uptime: 'bootAt', power: 'powerCuts', device: 'wifi', malware: 'malware', adb: 'adb' };
+    for (const k in over) if (f[k]) real[over[k]] = sim[over[k]];
+    return real;
   }
   return simSystem(now);
 }
 function simSystem(now) {
-  const wave = (period, amp) => Math.sin(now / 1000 / period) * amp, f = FORCE;
+  const wave = (period, amp) => Math.sin(now / 1000 / period) * amp, f = forced();
   const checked = WATCH_AT + Math.floor((now - WATCH_AT) / 120e3) * 120e3;   // the watchdogs "run" every 2 min
   return {
     sample: true,
@@ -1317,6 +1335,7 @@ function soundTick() {
 // browser itself says it's offline, so a sandbox that blocks requests (like the artifact viewer) doesn't cry wolf.
 let netOk = false, netDownSince = null, netSlow = 0;
 async function checkNet() {
+  if (forced()['net-down']) return setAlert('net', SAMPLE_ALERTS['net-down']);
   let ms = null;
   if (navigator.onLine) {
     const t0 = performance.now();
@@ -1403,10 +1422,12 @@ function bindDevices() {
   $('#alertTest').onclick = e => {   // each button turns one test state on or off
     const b = e.target.closest('button'); if (!b) return;
     const id = b.dataset.id;
-    if (SAMPLE_ALERTS[id]) { if (alerts.some(x => x.id === id)) clearAlert(id); else setAlert(id, SAMPLE_ALERTS[id]); }
-    else { FORCE[id] = !FORCE[id]; render(); }
-    document.querySelectorAll('#alertTest button').forEach(x => x.classList.toggle('on', !!FORCE[x.dataset.id] || alerts.some(a => a.id === x.dataset.id)));
+    if (!DEV.simulate) return;
+    DEV.tests = Object.assign({}, DEV.tests, { [id]: !(DEV.tests || {})[id] });
+    saveDevices(); applySim();
   };
+  $('#devSim').onchange = e => { DEV.simulate = e.target.checked; if (!DEV.simulate) DEV.tests = {}; saveDevices(); applySim(); };
+  simButtons();
   $('#updBtn').onclick = async () => {
     if (!upd.sha) return;
     if (!ON_PROJECTOR) {
@@ -1689,7 +1710,7 @@ function listen() {
       shared[k] = v;
       if (k === 'layout' && !drag) applyLayout(store.get('layout', null));
       else if (k === 'settings') { Object.assign(S, store.get('settings', {})); buildStage(); }
-      else if (k === 'devices') { Object.assign(DEV, store.get('devices', {})); render(); }
+      else if (k === 'devices') { Object.assign(DEV, store.get('devices', {})); applySim(); }
     }).catch(() => {});
   };
 }
@@ -1793,6 +1814,7 @@ window.BearWall = {
   sound: snd,   // BearWall.sound(id, opts) for widgets and lights.js
   // cards for the Dynamic widgets (see the cards section)
   card, uncard, cards: cardsNow, isMainDynamic, get spot() { return spot; },
+  get simulating() { return !!DEV.simulate; },
   debrief: reason => debrief(reason || 'button'),
   _test: { homography, applyH, validQuad, inQuad, localToPanel, panelToLocal, get inside() { return inside; }, checkUpdate, checkNet, get layout() { return L; }, get alerts() { return alerts; }, get upd() { return upd; } }
 };

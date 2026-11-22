@@ -19,13 +19,26 @@ function scaled(img, max) {
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
   return c;
 }
-// Glitch: the photo split into a red layer and a cyan layer; screen-blended they add back up to the photo
+// Glitch: the photo split into a red layer and a cyan layer, added back together slightly apart. Baked into finished images
+// once per photo (the projector's WebView/GPU draws live blend modes wrong, worst inside a warped section).
 function splitCanvases(img) {
   const c = scaled(img, 640), w = c.width, h = c.height, p = c.getContext('2d').getImageData(0, 0, w, h).data;
   return [[1, 0, 0], [0, 1, 1]].map(keep => {
     const o = mk(w, h), og = o.getContext('2d'), d = og.createImageData(w, h);
     for (let i = 0; i < p.length; i += 4) { d.data[i] = p[i] * keep[0]; d.data[i + 1] = p[i + 1] * keep[1]; d.data[i + 2] = p[i + 2] * keep[2]; d.data[i + 3] = 255; }
     og.putImageData(d, 0, 0);
+    return o;
+  });
+}
+// two frames: the resting split, and the big jittered one that flashes now and then
+function glitchFrames(img) {
+  const [r, c] = splitCanvases(img), w = r.width, h = r.height;
+  return [[.006, 0], [.032, .006]].map(([dx, dy]) => {
+    const o = mk(w, h), g = o.getContext('2d');
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'lighter';   // red + cyan add back up to the photo where they overlap
+    g.drawImage(r, -Math.round(w * dx), Math.round(h * dy));
+    g.drawImage(c, Math.round(w * dx * 1.1), -Math.round(h * dy * .7));
     return o;
   });
 }
@@ -41,7 +54,7 @@ async function sources(style, id, url) {
   if (style !== 'glitch') return {};
   const key = `${id}|glitch`;
   if (cache.has(key)) return cache.get(key);
-  const [r, c] = splitCanvases(await imgOf(url)), out = { x1: await toURL(r), x2: await toURL(c) };
+  const [a, b] = glitchFrames(await imgOf(url)), out = { x1: await toURL(a), x2: await toURL(b) };
   remember(key, out);
   return out;
 }
@@ -152,23 +165,20 @@ BearWall.register({
     @keyframes bwPhFlicker { 0% { opacity: 1; } 21% { opacity: .9; } 23% { opacity: 1; } 47% { opacity: .86; } 49% { opacity: .97; } 71% { opacity: .9; } 74% { opacity: 1; } }
     @keyframes bwPhSlice { 0%, 95% { opacity: 0; transform: none; } 96% { opacity: 1; transform: translateX(5%); } 97% { opacity: 1; transform: translateX(-3%); } 98% { opacity: 0; transform: none; } }
 
-    /* Glitch: red and cyan copies screen-blended back together, jittering apart; tracking line; glitch slices */
+    /* Glitch: the baked split frame, the big jitter frame flashing over it now and then, a tracking line, glitch slices.
+       Only opacity and transform move (no blend modes, no animated clip-path: the projector draws those wrong or slowly). */
     ${ST('glitch')} .x1, ${ST('glitch')} .x2, ${ST('glitch')} .s1, ${ST('glitch')} .s2 { display: block; }
-    ${ST('glitch')} .lay .x1, ${ST('glitch')} .lay .x2 { mix-blend-mode: screen; }
-    ${ST('glitch')} .lay .x1 { transform: translateX(calc(var(--u) * -.6)); } ${ST('glitch')} .lay .x2 { transform: translateX(calc(var(--u) * .6)); }
-    ${ST('glitch')} .scan { display: block; z-index: 3; top: -20%; bottom: auto; height: 12%; opacity: .5; mix-blend-mode: screen;
+    ${ST('glitch')} .lay .x2 { opacity: 0; }
+    ${ST('glitch')} .scan { display: block; z-index: 3; top: 0; bottom: auto; height: 12%; opacity: .35; transform: translateY(-170%);
       background: linear-gradient(to bottom, transparent, #ffffff30 45%, #ffffff55 50%, #ffffff30 55%, transparent); }
     .m-full ${ST('glitch')} .scan { animation: bwPhTrack 6s linear infinite; }
     .m-lite ${ST('glitch')} .scan { animation: bwPhTrack 6s steps(16) infinite; }
-    .m-full ${ST('glitch')} .lay.on .x1, .m-lite ${ST('glitch')} .lay.on .x1 { animation: bwPhJitR 5.3s steps(1) infinite; }
-    .m-full ${ST('glitch')} .lay.on .x2, .m-lite ${ST('glitch')} .lay.on .x2 { animation: bwPhJitC 7.1s steps(1) infinite; }
+    .m-full ${ST('glitch')} .lay.on .x2, .m-lite ${ST('glitch')} .lay.on .x2 { animation: bwPhJit 5.3s steps(1) infinite; }
     ${ST('glitch')} .lay.in { animation: bwPhGlitchIn .6s steps(6) both; }
     ${ST('glitch')} .lay.out { animation: bwPhFade .4s steps(3) both; }
-    @keyframes bwPhTrack { from { top: -20%; } to { top: 110%; } }
-    @keyframes bwPhJitR { 0%, 90% { transform: translateX(calc(var(--u) * -.6)); } 91% { transform: translateX(calc(var(--u) * -3)); } 93% { transform: translate(calc(var(--u) * 2), calc(var(--u) * .5)); } 95% { transform: translateX(calc(var(--u) * -.6)); } }
-    @keyframes bwPhJitC { 0%, 85% { transform: translateX(calc(var(--u) * .6)); } 86% { transform: translateX(calc(var(--u) * 3.4)); } 88% { transform: translate(calc(var(--u) * -1.5), calc(var(--u) * -.4)); } 90% { transform: translateX(calc(var(--u) * .6)); } }
-    @keyframes bwPhGlitchIn { 0% { opacity: 0; transform: translateX(6%); clip-path: inset(40% 0 35% 0); } 33% { opacity: 1; transform: translateX(-4%); clip-path: inset(10% 0 60% 0); }
-      66% { transform: translateX(2%); clip-path: inset(0 0 20% 0); } 100% { opacity: 1; transform: none; clip-path: inset(0 0 0 0); } }
+    @keyframes bwPhTrack { from { transform: translateY(-170%); } to { transform: translateY(920%); } }
+    @keyframes bwPhJit { 0%, 89% { opacity: 0; transform: none; } 90% { opacity: 1; transform: translateX(-1.5%); } 92% { opacity: 1; transform: translate(1%, .5%); } 94%, 100% { opacity: 0; transform: none; } }
+    @keyframes bwPhGlitchIn { 0% { opacity: 0; transform: translateX(6%); } 33% { opacity: 1; transform: translateX(-4%); } 66% { transform: translateX(2%); } 100% { opacity: 1; transform: none; } }
 
     /* caption and empty state */
     .w-photos .cap { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; padding: calc(var(--u) * 2) calc(var(--u) * 3);

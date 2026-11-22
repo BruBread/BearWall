@@ -144,7 +144,8 @@ BearWall.register({
     const strip = el.querySelector('.dy-strip');
     const chips = main && ctx.mode === 'square' ? all.filter(c => c.tier === 'urgent' && c.id.indexOf('db-') !== 0)
       .concat(all.filter(c => c.tier === 'heads' && now - c.at < 2 * 3600e3).sort((a, b) => b.at - a.at)).slice(0, 3) : [];
-    const sh = chips.map(c => `<div class="dy-chip ${c.tier}">${iconOf(c)}<span>${U.esc(c.title)}</span></div>`).join('');
+    const sh = (main && BearWall.simulating ? '<div class="dy-chip urgent"><span>SIMULATING</span></div>' : '')   // never mistake a test for the real thing
+      + chips.map(c => `<div class="dy-chip ${c.tier}">${iconOf(c)}<span>${U.esc(c.title)}</span></div>`).join('');
     if (strip._h !== sh) { strip.innerHTML = sh; strip._h = sh; }
     U.fit(el);
   }
