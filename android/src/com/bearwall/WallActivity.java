@@ -68,18 +68,24 @@ public class WallActivity extends Activity {
         ui.postDelayed(lightCheck, 500);
         // only holders of DUMP (the adb shell, root scripts like the power daemon) can ask for a sound
         registerReceiver(soundRx, new IntentFilter("com.bearwall.SOUND"), "android.permission.DUMP", null);
-        // the POWER script (root) says the panel goes dark in ~2.5 s: play the power-down animation first
-        registerReceiver(powerRx, new IntentFilter("com.bearwall.POWERDOWN"), "android.permission.DUMP", null);
+        powerWatch = new android.os.FileObserver(getFilesDir().getPath(), android.os.FileObserver.CLOSE_WRITE | android.os.FileObserver.MOVED_TO) {
+            public void onEvent(int ev, String name) {
+                if (!"powerdown".equals(name)) return;
+                new File(getFilesDir(), "powerdown").delete();
+                ui.post(new Runnable() { public void run() { wv.evaluateJavascript("window.BearWall && BearWall.powerDown && BearWall.powerDown()", null); } });
+            }
+        };
+        powerWatch.startWatching();
         IntentFilter vf = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
         vf.addAction("android.media.STREAM_MUTE_CHANGED_ACTION");
         registerReceiver(volRx, vf);
     }
 
-    @Override protected void onDestroy() { unregisterReceiver(soundRx); unregisterReceiver(volRx); unregisterReceiver(powerRx); super.onDestroy(); }
+    @Override protected void onDestroy() { unregisterReceiver(soundRx); unregisterReceiver(volRx); powerWatch.stopWatching(); super.onDestroy(); }
 
-    final BroadcastReceiver powerRx = new BroadcastReceiver() { public void onReceive(Context c, Intent i) {
-        wv.evaluateJavascript("window.BearWall && BearWall.powerDown && BearWall.powerDown()", null);
-    }};
+    // The POWER script (root) writes filesDir/powerdown ~2.5 s before the panel goes dark. The kernel tells us the moment it
+    // appears (inotify): no polling, and no `am broadcast`, which started a whole Java process and made the animation stutter.
+    android.os.FileObserver powerWatch;   // made in onCreate (the files folder isn't there before)
     // filesDir/front = "1" while the wall is on screen: the POWER script only waits for the animation then (HDMI etc. sleep at once)
     void setFront(boolean on) { try { Files.write(new File(getFilesDir(), "front"), on ? "1" : "0"); } catch (Exception ignored) { } }
 
