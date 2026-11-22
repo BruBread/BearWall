@@ -1907,7 +1907,7 @@ window.BearWall = {
   powerDown() {
     if (!stage || sleeping) return;
     poweringAt = Date.now();
-    snd('power-down'); say('sleep', { force: true, delay: 300 });
+    snd('power-down'); say('sleep', { force: true, delay: 900 });   // the voice after the heaviest part (widgets un-printing)
     return window.BearWallIntro && BearWallIntro.powerDown(stage, S.motion, { corners: secCorners });
   },
   sleep() {

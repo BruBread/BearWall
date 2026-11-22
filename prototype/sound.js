@@ -473,7 +473,12 @@ function credits() {
   voiceFiles = new Set(); delete lastPick.flip;
 })();
 setInterval(applyLevels, 60000);   // quiet hours start and end
-loadSettings().then(() => { applyLevels(); buildCard(); loadFiles(); loadVoice(); });
+loadSettings().then(() => { applyLevels(); buildCard(); loadFiles(); loadVoice().then(() => setTimeout(warmVoice, 20000)); });
+// decode the lines that play during an animation ahead of time (the power-down stuttered decoding "Going to sleep" cold)
+function warmVoice() {
+  if (SILENT) return;
+  Promise.all([...voiceFiles].filter(n => /^sleep-\d+\.mp3$/.test(n)).map(n => clip(n).catch(() => {}))).then(idleCheck);   // then let the speaker sleep again
+}
 
 window.BearWallSound = {
   play, ambience, volKey, event, say,
